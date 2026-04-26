@@ -102,3 +102,58 @@ func TestLogin_UserNotFound(t *testing.T) {
 		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }
+
+func TestJWTMiddleware_MissingToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := database.Connect(":memory:")
+	if err != nil {
+		t.Fatalf("db: %v", err)
+	}
+	defer db.Close()
+
+	h := &auth.Handler{DB: db, JWTSecret: "test-secret"}
+	r := gin.New()
+	r.GET("/protected", h.JWTMiddleware(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestJWTMiddleware_ValidToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := database.Connect(":memory:")
+	if err != nil {
+		t.Fatalf("db: %v", err)
+	}
+	defer db.Close()
+
+	h := &auth.Handler{DB: db, JWTSecret: "test-secret"}
+	r := gin.New()
+	r.POST("/auth/register", h.Register)
+	r.POST("/auth/login", h.Login)
+	r.GET("/protected", h.JWTMiddleware(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"user_id": c.GetString("user_id")})
+	})
+
+	postJSON(r, "/auth/register", `{"username":"mwuser","email":"mw@test.com","password":"password123"}`)
+	loginResp := postJSON(r, "/auth/login", `{"username":"mwuser","password":"password123"}`)
+	var loginBody map[string]interface{}
+	json.NewDecoder(loginResp.Body).Decode(&loginBody)
+	token := loginBody["token"].(string)
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
