@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"mangahub/internal/auth"
 	"mangahub/internal/manga"
+	"mangahub/internal/user"
 	"mangahub/pkg/database"
 )
 
@@ -28,6 +29,7 @@ func main() {
 
 	authHandler := &auth.Handler{DB: db, JWTSecret: jwtSecret}
 	mangaHandler := &manga.Handler{DB: db}
+	userHandler := &user.Handler{DB: db}
 
 	r := gin.Default()
 
@@ -36,6 +38,12 @@ func main() {
 
 	r.GET("/manga", mangaHandler.Search)
 	r.GET("/manga/:id", mangaHandler.GetByID)
+
+	protected := r.Group("/")
+	protected.Use(authHandler.JWTMiddleware())
+	protected.POST("/users/library", userHandler.AddToLibrary)
+	protected.GET("/users/library", userHandler.GetLibrary)
+	protected.PUT("/users/progress", userHandler.UpdateProgress)
 
 	log.Println("HTTP API server running on :8080")
 	if err := r.Run(":8080"); err != nil {
