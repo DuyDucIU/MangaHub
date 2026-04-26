@@ -1,0 +1,11 @@
+# Binaries
+*.exe
+*.exe~
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Go build cache
+/vendor/
