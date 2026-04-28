@@ -114,6 +114,28 @@ func (h *Handler) GetLibrary(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"reading_lists": lists, "total": total})
 }
 
+func (h *Handler) RemoveFromLibrary(c *gin.Context) {
+	userID := c.GetString("user_id")
+	mangaID := c.Param("manga_id")
+
+	result, err := h.DB.Exec(
+		"DELETE FROM user_progress WHERE user_id = ? AND manga_id = ?",
+		userID, mangaID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "manga not in library"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "removed from library", "manga_id": mangaID})
+}
+
 func (h *Handler) UpdateProgress(c *gin.Context) {
 	userID := c.GetString("user_id")
 

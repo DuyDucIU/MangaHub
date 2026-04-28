@@ -38,6 +38,7 @@ func setupUserRouter(t *testing.T) (*gin.Engine, string) {
 	protected.Use(authH.JWTMiddleware())
 	protected.POST("/users/library", userH.AddToLibrary)
 	protected.GET("/users/library", userH.GetLibrary)
+	protected.DELETE("/users/library/:manga_id", userH.RemoveFromLibrary)
 	protected.PUT("/users/progress", userH.UpdateProgress)
 
 	doPost(r, "/auth/register", `{"username":"testuser","email":"test@test.com","password":"password123"}`)
@@ -140,6 +141,35 @@ func TestGetLibrary_WithEntries(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp["total"].(float64) != 1 {
 		t.Errorf("expected total=1, got %v", resp["total"])
+	}
+}
+
+// DELETE /users/library/:manga_id
+
+func TestRemoveFromLibrary_Success(t *testing.T) {
+	r, token := setupUserRouter(t)
+	authReq(r, http.MethodPost, "/users/library", `{"manga_id":"one-piece","status":"reading"}`, token)
+	w := authReq(r, http.MethodDelete, "/users/library/one-piece", "", token)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRemoveFromLibrary_NotInLibrary(t *testing.T) {
+	r, token := setupUserRouter(t)
+	w := authReq(r, http.MethodDelete, "/users/library/one-piece", "", token)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRemoveFromLibrary_NoAuth(t *testing.T) {
+	r, _ := setupUserRouter(t)
+	req := httptest.NewRequest(http.MethodDelete, "/users/library/one-piece", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
 	}
 }
 

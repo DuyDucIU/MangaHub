@@ -10,6 +10,22 @@ import (
 	"mangahub/pkg/models"
 )
 
+// AllowedGenres defines the set of accepted genre strings.
+var AllowedGenres = map[string]bool{
+	"Action": true, "Adventure": true, "Comedy": true, "Drama": true,
+	"Fantasy": true, "Horror": true, "Mystery": true, "Psychological": true,
+	"Romance": true, "Sci-Fi": true, "Slice of Life": true, "Sports": true,
+	"Supernatural": true, "Thriller": true, "Historical": true, "Music": true,
+	"School": true, "Magic": true, "Fashion": true,
+	// Demographic tags — allowed as genre labels in our data model.
+	"Shounen": true, "Shoujo": true, "Seinen": true, "Josei": true,
+}
+
+// AllowedStatuses defines the accepted manga publication statuses.
+var AllowedStatuses = map[string]bool{
+	"ongoing": true, "completed": true, "hiatus": true,
+}
+
 type Handler struct {
 	DB *sql.DB
 }
@@ -90,4 +106,57 @@ func (h *Handler) GetByID(c *gin.Context) {
 
 	json.Unmarshal([]byte(genresStr), &m.Genres)
 	c.JSON(http.StatusOK, m)
+}
+
+type createMangaRequest struct {
+	ID            string   `json:"id"             binding:"required"`
+	Title         string   `json:"title"          binding:"required"`
+	Author        string   `json:"author"         binding:"required"`
+	Genres        []string `json:"genres"         binding:"required,min=1"`
+	Status        string   `json:"status"         binding:"required"`
+	TotalChapters int      `json:"total_chapters" binding:"min=0"`
+	Description   string   `json:"description"`
+}
+
+func (h *Handler) Create(c *gin.Context) {
+	var req createMangaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate status.
+	if !AllowedStatuses[strings.ToLower(req.Status)] {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid status; must be one of: ongoing, completed, hiatus",
+		})
+		return
+	}
+	req.Status = strings.ToLower(req.Status)
+
+	// Validate each genre.
+	for _, g := range req.Genres {
+		if !AllowedGenres[g] {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "unknown genre: " + g,
+			})
+			return
+		}
+	}
+
+	genres, _ := json.Marshal(req.Genres)
+	_, err := h.DB.Exec(
+		`INSERT INTO manga (id, title, author, genres, status, total_chapters, description)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		req.ID, req.Title, req.Author, string(genres), req.Status, req.TotalChapters, req.Description,
+	)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "manga with this ID already exists"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "manga created",
+		"id":      req.ID,
+	})
 }

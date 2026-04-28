@@ -41,8 +41,10 @@ func main() {
 
 	protected := r.Group("/")
 	protected.Use(authHandler.JWTMiddleware())
+	protected.POST("/manga", mangaHandler.Create)
 	protected.POST("/users/library", userHandler.AddToLibrary)
 	protected.GET("/users/library", userHandler.GetLibrary)
+	protected.DELETE("/users/library/:manga_id", userHandler.RemoveFromLibrary)
 	protected.PUT("/users/progress", userHandler.UpdateProgress)
 
 	log.Println("HTTP API server running on :8080")
