@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -112,4 +113,92 @@ func TestBroadcastToUser_DeadConnection(t *testing.T) {
 	// failed write should remove the connection
 	assert.Equal(t, 0, srv.count())
 	s.Close()
+}
+
+func makeToken(t *testing.T, userID string) string {
+	t.Helper()
+	t.Setenv("JWT_SECRET", "test-secret")
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id":  userID,
+		"username": "tester",
+		"exp":      time.Now().Add(time.Hour).Unix(),
+	})
+	signed, err := tok.SignedString([]byte("test-secret"))
+	if err != nil {
+		t.Fatalf("makeToken: %v", err)
+	}
+	return signed
+}
+
+func TestHandleConn_CapacityLimit(t *testing.T) {
+	srv := New("9090")
+	srv.MaxConnections = 1
+
+	existing, _ := net.Pipe()
+	defer existing.Close()
+	srv.Register("existing", existing)
+
+	serverSide, clientSide := net.Pipe()
+	defer serverSide.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		srv.handleConn(serverSide)
+	}()
+
+	msg := readMsg(t, clientSide)
+	assert.Equal(t, "error", msg["type"])
+	assert.Equal(t, "server at capacity", msg["message"])
+	clientSide.Close()
+	<-done
+}
+
+func TestHandleConn_InvalidToken(t *testing.T) {
+	srv := New("9090")
+	t.Setenv("JWT_SECRET", "test-secret")
+
+	serverSide, clientSide := net.Pipe()
+	defer serverSide.Close()
+	defer clientSide.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		srv.handleConn(serverSide)
+	}()
+
+	payload, _ := json.Marshal(authMsg{Type: "auth", Token: "bad.token.here"})
+	clientSide.Write(append(payload, '\n'))
+
+	msg := readMsg(t, clientSide)
+	assert.Equal(t, "auth_error", msg["type"])
+	<-done
+}
+
+func TestHandleConn_ValidAuth(t *testing.T) {
+	srv := New("9090")
+	token := makeToken(t, "user1")
+
+	serverSide, clientSide := net.Pipe()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		srv.handleConn(serverSide)
+	}()
+
+	payload, _ := json.Marshal(authMsg{Type: "auth", Token: token})
+	clientSide.Write(append(payload, '\n'))
+
+	msg := readMsg(t, clientSide)
+	assert.Equal(t, "auth_ok", msg["type"])
+	assert.Equal(t, "user1", msg["user_id"])
+
+	assert.Equal(t, 1, srv.count())
+
+	clientSide.Close() // trigger disconnect
+	<-done             // wait for handleConn to clean up
+
+	assert.Equal(t, 0, srv.count())
 }
