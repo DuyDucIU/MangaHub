@@ -66,14 +66,10 @@ func (s *ProgressSyncServer) count() int {
 
 // BroadcastToUser sends a progress_update message to the user's active connection.
 // If the write fails, the connection is removed. No-op if user is not connected.
-// The write is dispatched via a goroutine with a done channel: callers that need to
-// proceed (like test readers using net.Pipe) can do so immediately, while the goroutine
-// handles cleanup. The function blocks only until the goroutine signals it has finished
-// or the write is in progress.
 func (s *ProgressSyncServer) BroadcastToUser(update ProgressUpdate) {
-	s.mu.RLock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	conn, ok := s.Connections[update.UserID]
-	s.mu.RUnlock()
 	if !ok {
 		return
 	}
@@ -84,28 +80,9 @@ func (s *ProgressSyncServer) BroadcastToUser(update ProgressUpdate) {
 		Chapter:   update.Chapter,
 		Timestamp: update.Timestamp,
 	}
-
-	// errCh receives the write result. We start the write in a goroutine so that
-	// synchronous-pipe callers (net.Pipe) do not deadlock when the reader runs after us.
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- writeMsg(conn, msg)
-	}()
-
-	// Wait briefly for an immediate error (e.g. closed connection). If the write is
-	// still in progress after the deadline, leave it to run in the background.
-	select {
-	case err := <-errCh:
-		if err != nil {
-			log.Printf("tcp: write failed for user %s: %v", update.UserID, err)
-			s.mu.Lock()
-			if s.Connections[update.UserID] == conn {
-				delete(s.Connections, update.UserID)
-			}
-			s.mu.Unlock()
-		}
-	case <-time.After(time.Millisecond):
-		// Write is in progress (connection alive, reader will drain it). Continue.
+	if err := writeMsg(conn, msg); err != nil {
+		log.Printf("tcp: write failed for user %s: %v", update.UserID, err)
+		delete(s.Connections, update.UserID)
 	}
 }
 

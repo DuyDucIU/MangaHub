@@ -29,7 +29,7 @@ func TestRegister(t *testing.T) {
 
 	srv.Register("user1", s)
 
-	assert.Len(t, srv.Connections, 1)
+	assert.Equal(t, 1, srv.count())
 	assert.Equal(t, s, srv.Connections["user1"])
 }
 
@@ -43,7 +43,7 @@ func TestRegister_ReplacesExistingConnection(t *testing.T) {
 	srv.Register("user1", s1)
 	srv.Register("user1", s2) // should close s1 and replace
 
-	assert.Len(t, srv.Connections, 1)
+	assert.Equal(t, 1, srv.count())
 	assert.Equal(t, s2, srv.Connections["user1"])
 
 	buf := make([]byte, 1)
@@ -61,7 +61,7 @@ func TestUnregister(t *testing.T) {
 	srv.Register("user1", s)
 	srv.Unregister("user1")
 
-	assert.Empty(t, srv.Connections)
+	assert.Equal(t, 0, srv.count())
 }
 
 func TestUnregister_NoOp(t *testing.T) {
@@ -79,9 +79,15 @@ func TestBroadcastToUser(t *testing.T) {
 	srv.Register("user1", s)
 
 	update := ProgressUpdate{UserID: "user1", MangaID: "one-piece", Chapter: 95, Timestamp: 1000}
+
+	msgCh := make(chan map[string]any, 1)
+	go func() {
+		msgCh <- readMsg(t, c)
+	}()
+
 	srv.BroadcastToUser(update)
 
-	msg := readMsg(t, c)
+	msg := <-msgCh
 	assert.Equal(t, "progress_update", msg["type"])
 	assert.Equal(t, "user1", msg["user_id"])
 	assert.Equal(t, "one-piece", msg["manga_id"])
@@ -104,6 +110,6 @@ func TestBroadcastToUser_DeadConnection(t *testing.T) {
 	srv.BroadcastToUser(ProgressUpdate{UserID: "user1", MangaID: "one-piece", Chapter: 1, Timestamp: 1000})
 
 	// failed write should remove the connection
-	assert.Empty(t, srv.Connections)
+	assert.Equal(t, 0, srv.count())
 	s.Close()
 }
