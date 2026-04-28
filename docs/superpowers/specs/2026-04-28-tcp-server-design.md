@@ -47,13 +47,14 @@ cmd/tcp-server/
 
 ## Data Structures
 
-Exactly as defined in the project spec:
+As defined in the project spec, extended with `MaxConnections` to support UC-007 A2 (capacity rejection):
 
 ```go
 type ProgressSyncServer struct {
-    Port        string
-    Connections map[string]net.Conn  // user_id → single active connection
-    Broadcast   chan ProgressUpdate
+    Port           string
+    Connections    map[string]net.Conn  // user_id → single active connection
+    Broadcast      chan ProgressUpdate
+    MaxConnections int                  // default 30 (spec target: 20–30 concurrent TCP connections)
 }
 
 type ProgressUpdate struct {
@@ -103,15 +104,16 @@ JWT validation reuses the same secret as the HTTP API (`JWT_SECRET` env var).
 
 ## Error Handling
 
-| Scenario | Behavior |
-|----------|----------|
-| Client fails to auth within 5s | Close connection, log warning |
-| Invalid JWT | Send `auth_error`, close connection |
-| Write to dead connection | Remove from `Connections`, log, continue |
-| Client disconnects | `Unregister` cleans up map entry |
-| TCP server down (HTTP API side) | Log warning, return HTTP 200 anyway — progress saved to DB |
-| Unknown `user_id` on broadcast | Return 200 silently — user not connected, not an error |
-| Malformed broadcast payload | Return 400, log error |
+| Scenario | Behavior | Source |
+|----------|----------|--------|
+| Server at capacity (`len(Connections) >= MaxConnections`) | Send `{"type":"error","message":"server at capacity"}`, close connection | UC-007 A2 |
+| Client fails to auth within 5s | Close connection, log warning | our decision |
+| Invalid JWT | Send `auth_error`, close connection | UC-007 A1 |
+| Write to dead connection | Remove from `Connections`, log, continue | UC-008 A2 |
+| Client disconnects | `Unregister` cleans up map entry | UC-008 A1 |
+| TCP server down (HTTP API side) | Log warning, return HTTP 200 anyway — progress saved to DB | our decision (UC-006 A2 specifies queuing, out of scope for academic timeline) |
+| Unknown `user_id` on broadcast | Return 200 silently — user not connected, not an error | our decision |
+| Malformed broadcast payload | Return 400, log error | our decision |
 
 HTTP API timeout to TCP server: **1 second** (non-blocking to end user).
 
@@ -149,7 +151,7 @@ The TCP server address (`localhost:9099`) is read from `TCP_INTERNAL_ADDR` env v
 
 ## Out of Scope
 
-- Message queuing when TCP server is unavailable (fire-and-forget only)
-- Multiple connections per user (spec defines `map[string]net.Conn`, one per user)
+- **Message queuing when TCP server is unavailable** — UC-006 A2 specifies queuing, but this is excluded for academic timeline. Fire-and-forget is used instead.
+- Multiple connections per user — spec defines `map[string]net.Conn`, one connection per user
 - TLS on TCP connections
-- TCP client library / CLI demo client (can be tested with `nc` or `telnet`)
+- TCP client library / CLI demo client — can be tested with `nc` or `telnet`
