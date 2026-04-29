@@ -211,7 +211,7 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 // internal broadcast endpoint. Fire-and-forget: HTTP API returns 200 regardless of
 // TCP server availability (UC-006 A2 — progress is already saved to DB).
 func notifyTCPServer(userID, mangaID string, chapter int) {
-	addr := os.Getenv("TCP_INTERNAL_ADDR")
+	addr := os.Getenv("TCP_INTERNAL_URL")
 	if addr == "" {
 		addr = "http://localhost:9099"
 	}

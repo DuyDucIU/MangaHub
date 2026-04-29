@@ -158,7 +158,7 @@ type serverMsg struct {
 	Type      string `json:"type"`
 	UserID    string `json:"user_id,omitempty"`
 	MangaID   string `json:"manga_id,omitempty"`
-	Chapter   int    `json:"chapter,omitempty"`
+	Chapter   int    `json:"chapter"`
 	Timestamp int64  `json:"timestamp,omitempty"`
 	Message   string `json:"message,omitempty"`
 }

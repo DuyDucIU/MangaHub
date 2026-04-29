@@ -23,6 +23,10 @@ func (s *ProgressSyncServer) handleBroadcast(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	s.Broadcast <- update
-	w.WriteHeader(http.StatusOK)
+	select {
+	case s.Broadcast <- update:
+		w.WriteHeader(http.StatusOK)
+	default:
+		http.Error(w, "broadcast queue full", http.StatusServiceUnavailable)
+	}
 }
