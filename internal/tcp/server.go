@@ -175,7 +175,7 @@ func writeMsg(conn net.Conn, msg serverMsg) error {
 func validateJWT(tokenStr string) (string, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		secret = "mangahub-secret-key"
+		secret = "mangahub-dev-secret"
 	}
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
