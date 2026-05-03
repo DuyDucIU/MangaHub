@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"mangahub/internal/tcp"
 )
@@ -27,5 +29,13 @@ func main() {
 		}
 	}()
 
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-quit
+		srv.Shutdown()
+	}()
+
 	srv.Run()
+	log.Println("tcp: server stopped")
 }

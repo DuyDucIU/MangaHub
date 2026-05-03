@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -28,6 +29,7 @@ type ProgressSyncServer struct {
 	Broadcast      chan ProgressUpdate
 	MaxConnections int
 	mu             sync.RWMutex
+	listener       net.Listener
 }
 
 // New creates a ProgressSyncServer with sensible defaults.
@@ -86,12 +88,15 @@ func (s *ProgressSyncServer) BroadcastToUser(update ProgressUpdate) {
 	}
 }
 
-// Run starts the TCP listener and the broadcast consumer goroutine. Blocks until listener fails.
+// Run starts the TCP listener and the broadcast consumer goroutine. Blocks until Shutdown is called.
 func (s *ProgressSyncServer) Run() {
 	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
 		log.Fatalf("tcp: listen: %v", err)
 	}
+	s.mu.Lock()
+	s.listener = ln
+	s.mu.Unlock()
 	defer ln.Close()
 	log.Printf("tcp: listening on :%s", s.Port)
 
@@ -104,11 +109,29 @@ func (s *ProgressSyncServer) Run() {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return // listener closed by Shutdown
+			}
 			log.Printf("tcp: accept: %v", err)
 			continue
 		}
 		go s.handleConn(conn)
 	}
+}
+
+// Shutdown closes the listener and all active client connections gracefully.
+func (s *ProgressSyncServer) Shutdown() {
+	log.Println("tcp: shutting down...")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listener != nil {
+		s.listener.Close()
+	}
+	for userID, conn := range s.Connections {
+		conn.Close()
+		delete(s.Connections, userID)
+	}
+	log.Println("tcp: all connections closed")
 }
 
 // handleConn runs in its own goroutine for each TCP client.
