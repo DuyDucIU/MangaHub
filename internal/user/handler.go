@@ -17,6 +17,8 @@ type Handler struct {
 	DB *sql.DB
 }
 
+var tcpNotifyClient = &http.Client{Timeout: time.Second}
+
 var validStatuses = map[string]bool{
 	"reading":      true,
 	"completed":    true,
@@ -226,11 +228,13 @@ func notifyTCPServer(userID, mangaID string, chapter int) {
 		Chapter:   chapter,
 		Timestamp: time.Now().Unix(),
 	})
-	client := &http.Client{Timeout: time.Second}
-	resp, err := client.Post(addr+"/internal/broadcast", "application/json", bytes.NewReader(payload))
+	resp, err := tcpNotifyClient.Post(addr+"/internal/broadcast", "application/json", bytes.NewReader(payload))
 	if err != nil {
 		log.Printf("user: TCP notify failed: %v", err)
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("user: TCP notify: unexpected status %d", resp.StatusCode)
+	}
 }

@@ -30,6 +30,8 @@ type ProgressSyncServer struct {
 	MaxConnections int
 	mu             sync.RWMutex
 	listener       net.Listener
+	done           chan struct{}
+	closeOnce      sync.Once
 }
 
 // New creates a ProgressSyncServer with sensible defaults.
@@ -39,6 +41,7 @@ func New(port string) *ProgressSyncServer {
 		Connections:    make(map[string]net.Conn),
 		Broadcast:      make(chan ProgressUpdate, 100),
 		MaxConnections: 30,
+		done:           make(chan struct{}),
 	}
 }
 
@@ -57,6 +60,13 @@ func (s *ProgressSyncServer) Unregister(userID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.Connections, userID)
+}
+
+// connFor returns the connection registered for userID, or nil if not connected.
+func (s *ProgressSyncServer) connFor(userID string) net.Conn {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Connections[userID]
 }
 
 // count returns the current number of active connections.
@@ -101,8 +111,16 @@ func (s *ProgressSyncServer) Run() {
 	log.Printf("tcp: listening on :%s", s.Port)
 
 	go func() {
-		for update := range s.Broadcast {
-			s.BroadcastToUser(update)
+		for {
+			select {
+			case update, ok := <-s.Broadcast:
+				if !ok {
+					return
+				}
+				s.BroadcastToUser(update)
+			case <-s.done:
+				return
+			}
 		}
 	}()
 
@@ -121,17 +139,20 @@ func (s *ProgressSyncServer) Run() {
 
 // Shutdown closes the listener and all active client connections gracefully.
 func (s *ProgressSyncServer) Shutdown() {
-	log.Println("tcp: shutting down...")
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.listener != nil {
-		s.listener.Close()
-	}
-	for userID, conn := range s.Connections {
-		conn.Close()
-		delete(s.Connections, userID)
-	}
-	log.Println("tcp: all connections closed")
+	s.closeOnce.Do(func() {
+		log.Println("tcp: shutting down...")
+		s.mu.Lock()
+		if s.listener != nil {
+			s.listener.Close()
+		}
+		for userID, conn := range s.Connections {
+			conn.Close()
+			delete(s.Connections, userID)
+		}
+		s.mu.Unlock()
+		close(s.done)
+		log.Println("tcp: all connections closed")
+	})
 }
 
 // handleConn runs in its own goroutine for each TCP client.

@@ -20,9 +20,19 @@ func TestHandleBroadcast_ValidPayload(t *testing.T) {
 	srv.Register("user1", s)
 
 	// drain broadcast channel so handler doesn't block
+	stopDrain := make(chan struct{})
+	t.Cleanup(func() { close(stopDrain) })
 	go func() {
-		for update := range srv.Broadcast {
-			srv.BroadcastToUser(update)
+		for {
+			select {
+			case update, ok := <-srv.Broadcast:
+				if !ok {
+					return
+				}
+				srv.BroadcastToUser(update)
+			case <-stopDrain:
+				return
+			}
 		}
 	}()
 
@@ -62,8 +72,18 @@ func TestHandleBroadcast_UnknownUser(t *testing.T) {
 	srv := New("9090")
 
 	// drain so handler doesn't block on channel send
+	stopDrain := make(chan struct{})
+	t.Cleanup(func() { close(stopDrain) })
 	go func() {
-		for range srv.Broadcast {
+		for {
+			select {
+			case _, ok := <-srv.Broadcast:
+				if !ok {
+					return
+				}
+			case <-stopDrain:
+				return
+			}
 		}
 	}()
 

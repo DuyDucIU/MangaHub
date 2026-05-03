@@ -31,7 +31,7 @@ func TestRegister(t *testing.T) {
 	srv.Register("user1", s)
 
 	assert.Equal(t, 1, srv.count())
-	assert.Equal(t, s, srv.Connections["user1"])
+	assert.Equal(t, s, srv.connFor("user1"))
 }
 
 func TestRegister_ReplacesExistingConnection(t *testing.T) {
@@ -45,7 +45,7 @@ func TestRegister_ReplacesExistingConnection(t *testing.T) {
 	srv.Register("user1", s2) // should close s1 and replace
 
 	assert.Equal(t, 1, srv.count())
-	assert.Equal(t, s2, srv.Connections["user1"])
+	assert.Equal(t, s2, srv.connFor("user1"))
 
 	buf := make([]byte, 1)
 	s1.SetDeadline(time.Now().Add(100 * time.Millisecond))
