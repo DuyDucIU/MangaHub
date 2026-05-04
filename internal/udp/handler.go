@@ -13,6 +13,10 @@ func (s *NotificationServer) InternalHandler() http.Handler {
 	return mux
 }
 
+// handleNotify handles POST /internal/notify. It rejects non-POST requests,
+// decodes the JSON body into a NotifyRequest, and forwards it to the Notify
+// channel non-blocking. Returns 503 if the server is shutting down or the
+// channel is at capacity.
 func (s *NotificationServer) handleNotify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
