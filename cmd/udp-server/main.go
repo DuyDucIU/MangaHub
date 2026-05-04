@@ -10,26 +10,26 @@ import (
 	"syscall"
 	"time"
 
-	"mangahub/internal/tcp"
+	"mangahub/internal/udp"
 )
 
 func main() {
-	port := os.Getenv("TCP_PORT")
+	port := os.Getenv("UDP_PORT")
 	if port == "" {
-		port = "9090"
+		port = "9091"
 	}
-	internalAddr := os.Getenv("TCP_INTERNAL_ADDR")
+	internalAddr := os.Getenv("UDP_INTERNAL_ADDR")
 	if internalAddr == "" {
-		internalAddr = ":9099"
+		internalAddr = ":9094"
 	}
 
-	srv := tcp.New(port)
+	srv := udp.New(port)
 
 	httpSrv := &http.Server{Addr: internalAddr, Handler: srv.InternalHandler()}
 	go func() {
-		log.Printf("tcp: internal HTTP on %s", internalAddr)
+		log.Printf("udp: internal HTTP on %s", internalAddr)
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("tcp: internal HTTP: %v", err)
+			log.Fatalf("udp: internal HTTP: %v", err)
 		}
 	}()
 
@@ -42,10 +42,10 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := httpSrv.Shutdown(ctx); err != nil {
-			log.Printf("tcp: internal HTTP shutdown: %v", err)
+			log.Printf("udp: internal HTTP shutdown: %v", err)
 		}
 	}()
 
 	srv.Run()
-	log.Println("tcp: server stopped")
+	log.Println("udp: server stopped")
 }
