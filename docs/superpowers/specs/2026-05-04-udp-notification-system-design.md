@@ -19,7 +19,8 @@ Three new files:
 ```
 cmd/udp-server/main.go     — server entry point, SIGTERM/SIGINT graceful shutdown
 cmd/udp-client/main.go     — two-mode demo tool (subscribe | broadcast)
-internal/udp/server.go     — NotificationServer core logic + tests
+internal/udp/server.go      — NotificationServer core logic
+internal/udp/server_test.go — unit tests
 ```
 
 Mirrors the TCP layout (`cmd/tcp-server`, `cmd/tcp-client`, `internal/tcp/server.go`) with one deliberate difference: no `handler.go` because there is no inter-service HTTP endpoint. All communication goes through the single UDP socket.
