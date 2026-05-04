@@ -71,14 +71,8 @@ func startTestServer(t *testing.T) (*NotificationServer, *net.UDPAddr) {
 	time.Sleep(20 * time.Millisecond) // let Run() bind
 	t.Cleanup(srv.Shutdown)
 	srv.mu.RLock()
-	addr := srv.conn.LocalAddr().(*net.UDPAddr)
-	// Convert to 127.0.0.1 for client communication compatibility on all platforms
-	if len(addr.IP) == 16 && addr.IP.To4() != nil {
-		addr.IP = addr.IP.To4()
-	}
-	if addr.IP == nil || addr.IP.IsUnspecified() {
-		addr.IP = net.ParseIP("127.0.0.1")
-	}
+	rawAddr := srv.conn.LocalAddr().(*net.UDPAddr)
+	addr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: rawAddr.Port}
 	srv.mu.RUnlock()
 	return srv, addr
 }

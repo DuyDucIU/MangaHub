@@ -81,7 +81,10 @@ type outPkt struct {
 
 // Run opens the UDP listener and processes packets and Notify requests until Shutdown.
 func (s *NotificationServer) Run() {
-	port, _ := strconv.Atoi(s.Port)
+	port, err := strconv.Atoi(s.Port)
+	if err != nil {
+		log.Fatalf("udp: invalid port %q: %v", s.Port, err)
+	}
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port})
 	if err != nil {
 		log.Fatalf("udp: listen: %v", err)
@@ -127,16 +130,11 @@ func (s *NotificationServer) Run() {
 	}
 }
 
-// Shutdown closes the UDP connection and signals the run loop to stop.
+// Shutdown signals the run loop to stop; Run()'s defer closes the connection.
 func (s *NotificationServer) Shutdown() {
 	s.closeOnce.Do(func() {
 		log.Println("udp: shutting down...")
 		close(s.done)
-		s.mu.Lock()
-		if s.conn != nil {
-			s.conn.Close()
-		}
-		s.mu.Unlock()
 	})
 }
 
