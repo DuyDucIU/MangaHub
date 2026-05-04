@@ -287,8 +287,17 @@ func TestShutdown_StopsRun(t *testing.T) {
 
 func TestShutdown_Idempotent(t *testing.T) {
 	srv := New("0")
-	go srv.Run()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		srv.Run()
+	}()
 	time.Sleep(20 * time.Millisecond)
 	srv.Shutdown()
 	srv.Shutdown() // must not panic
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Run() did not stop after double Shutdown()")
+	}
 }
