@@ -9,3 +9,6 @@
 
 # Go build cache
 /vendor/
+
+# Git worktrees
+.worktrees/
