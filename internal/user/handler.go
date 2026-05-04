@@ -1,9 +1,14 @@
 package user
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,6 +16,8 @@ import (
 type Handler struct {
 	DB *sql.DB
 }
+
+var tcpNotifyClient = &http.Client{Timeout: time.Second}
 
 var validStatuses = map[string]bool{
 	"reading":      true,
@@ -192,10 +199,42 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 		return
 	}
 
+	go notifyTCPServer(userID, req.MangaID, req.CurrentChapter) // fire-and-forget TCP sync
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":         "progress updated",
 		"manga_id":        req.MangaID,
 		"current_chapter": req.CurrentChapter,
 		"status":          newStatus,
 	})
+}
+
+// notifyTCPServer fires a goroutine that POSTs the progress update to the TCP server's
+// internal broadcast endpoint. Fire-and-forget: HTTP API returns 200 regardless of
+// TCP server availability (UC-006 A2 — progress is already saved to DB).
+func notifyTCPServer(userID, mangaID string, chapter int) {
+	addr := os.Getenv("TCP_INTERNAL_URL")
+	if addr == "" {
+		addr = "http://localhost:9099"
+	}
+	payload, _ := json.Marshal(struct {
+		UserID    string `json:"user_id"`
+		MangaID   string `json:"manga_id"`
+		Chapter   int    `json:"chapter"`
+		Timestamp int64  `json:"timestamp"`
+	}{
+		UserID:    userID,
+		MangaID:   mangaID,
+		Chapter:   chapter,
+		Timestamp: time.Now().Unix(),
+	})
+	resp, err := tcpNotifyClient.Post(addr+"/internal/broadcast", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		log.Printf("user: TCP notify failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("user: TCP notify: unexpected status %d", resp.StatusCode)
+	}
 }
