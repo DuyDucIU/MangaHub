@@ -175,3 +175,63 @@ func TestRun_MalformedJSON_Ignored(t *testing.T) {
 	require.NoError(t, err)
 	noPacket(t, client)
 }
+
+func TestBroadcast_MatchingSubscriber(t *testing.T) {
+	srv, srvAddr := startTestServer(t)
+	client := newTestClient(t)
+
+	sendPkt(t, client, srvAddr, map[string]any{"type": "register", "manga_ids": []string{"one-piece"}})
+	recvPkt(t, client) // consume ack
+
+	srv.Notify <- NotifyRequest{MangaID: "one-piece", Message: "Chapter 1101 released!"}
+
+	msg := recvPkt(t, client)
+	assert.Equal(t, "notification", msg["type"])
+	assert.Equal(t, "one-piece", msg["manga_id"])
+	assert.Equal(t, "Chapter 1101 released!", msg["message"])
+	assert.NotZero(t, msg["timestamp"])
+}
+
+func TestBroadcast_NonMatchingSubscriber(t *testing.T) {
+	srv, srvAddr := startTestServer(t)
+	client := newTestClient(t)
+
+	sendPkt(t, client, srvAddr, map[string]any{"type": "register", "manga_ids": []string{"naruto"}})
+	recvPkt(t, client)
+
+	srv.Notify <- NotifyRequest{MangaID: "one-piece", Message: "Chapter 1101 released!"}
+	noPacket(t, client)
+}
+
+func TestBroadcast_EmptyFilter_ReceivesAll(t *testing.T) {
+	srv, srvAddr := startTestServer(t)
+	client := newTestClient(t)
+
+	sendPkt(t, client, srvAddr, map[string]any{"type": "register", "manga_ids": []string{}})
+	recvPkt(t, client)
+
+	srv.Notify <- NotifyRequest{MangaID: "one-piece", Message: "new chapter"}
+
+	msg := recvPkt(t, client)
+	assert.Equal(t, "notification", msg["type"])
+	assert.Equal(t, "one-piece", msg["manga_id"])
+}
+
+func TestBroadcast_MultipleClients_OnlyMatchingNotified(t *testing.T) {
+	srv, srvAddr := startTestServer(t)
+	c1 := newTestClient(t) // subscribes to one-piece
+	c2 := newTestClient(t) // subscribes to naruto
+
+	sendPkt(t, c1, srvAddr, map[string]any{"type": "register", "manga_ids": []string{"one-piece"}})
+	recvPkt(t, c1)
+	sendPkt(t, c2, srvAddr, map[string]any{"type": "register", "manga_ids": []string{"naruto"}})
+	recvPkt(t, c2)
+
+	srv.Notify <- NotifyRequest{MangaID: "one-piece", Message: "new chapter"}
+
+	msg := recvPkt(t, c1)
+	assert.Equal(t, "notification", msg["type"])
+	assert.Equal(t, "one-piece", msg["manga_id"])
+
+	noPacket(t, c2)
+}

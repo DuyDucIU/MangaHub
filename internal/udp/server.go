@@ -172,11 +172,36 @@ func (s *NotificationServer) sendAck(addr *net.UDPAddr, message string) {
 	}
 }
 
-// broadcast is a placeholder — implemented in Task 3.
-func (s *NotificationServer) broadcast(_ NotifyRequest) {}
+// broadcast sends a notification packet to all subscribers whose filter matches req.MangaID.
+// On write failure the subscriber is removed from the map (stale client cleanup).
+func (s *NotificationServer) broadcast(req NotifyRequest) {
+	data, _ := json.Marshal(outPkt{
+		Type:      "notification",
+		MangaID:   req.MangaID,
+		Message:   req.Message,
+		Timestamp: time.Now().Unix(),
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, entry := range s.clients {
+		if !matchesFilter(entry.Filter, req.MangaID) {
+			continue
+		}
+		if _, err := s.conn.WriteToUDP(data, entry.Addr); err != nil {
+			log.Printf("udp: write to %s failed: %v — removing", key, err)
+			delete(s.clients, key)
+		}
+	}
+}
 
-// matchesFilter is a placeholder — implemented in Task 3.
-func matchesFilter(_ []string, _ string) bool { return false }
-
-// keep time imported until Task 3 uses it
-var _ = time.Now
+func matchesFilter(filter []string, mangaID string) bool {
+	if len(filter) == 0 {
+		return true
+	}
+	for _, id := range filter {
+		if id == mangaID {
+			return true
+		}
+	}
+	return false
+}
