@@ -1,8 +1,11 @@
 package udp
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -300,4 +303,61 @@ func TestShutdown_Idempotent(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("Run() did not stop after double Shutdown()")
 	}
+}
+
+func TestInternalHandler_ValidPayload(t *testing.T) {
+	srv := New("0")
+	body := `{"manga_id":"one-piece","message":"Chapter 1101 released!"}`
+	req := httptest.NewRequest(http.MethodPost, "/internal/notify", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	srv.InternalHandler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	select {
+	case got := <-srv.Notify:
+		assert.Equal(t, "one-piece", got.MangaID)
+		assert.Equal(t, "Chapter 1101 released!", got.Message)
+	default:
+		t.Fatal("expected NotifyRequest on channel but got none")
+	}
+}
+
+func TestInternalHandler_InvalidJSON(t *testing.T) {
+	srv := New("0")
+	req := httptest.NewRequest(http.MethodPost, "/internal/notify", bytes.NewBufferString("not json"))
+	w := httptest.NewRecorder()
+	srv.InternalHandler().ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestInternalHandler_ChannelFull(t *testing.T) {
+	srv := New("0")
+	for i := 0; i < 100; i++ {
+		srv.Notify <- NotifyRequest{MangaID: "one-piece", Message: "fill"}
+	}
+	req := httptest.NewRequest(http.MethodPost, "/internal/notify",
+		bytes.NewBufferString(`{"manga_id":"one-piece","message":"overflow"}`))
+	w := httptest.NewRecorder()
+	srv.InternalHandler().ServeHTTP(w, req)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestInternalHandler_ServerShuttingDown(t *testing.T) {
+	srv := New("0")
+	close(srv.done) // simulate shutdown without calling Shutdown() to avoid close-of-nil conn
+	req := httptest.NewRequest(http.MethodPost, "/internal/notify",
+		bytes.NewBufferString(`{"manga_id":"one-piece","message":"test"}`))
+	w := httptest.NewRecorder()
+	srv.InternalHandler().ServeHTTP(w, req)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestInternalHandler_MethodNotAllowed(t *testing.T) {
+	srv := New("0")
+	req := httptest.NewRequest(http.MethodGet, "/internal/notify", nil)
+	w := httptest.NewRecorder()
+	srv.InternalHandler().ServeHTTP(w, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
