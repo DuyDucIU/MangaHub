@@ -34,7 +34,11 @@ func main() {
 
 	var mangaIDs []string
 	if *mangaFlag != "" {
-		mangaIDs = strings.Split(*mangaFlag, ",")
+		for _, id := range strings.Split(*mangaFlag, ",") {
+			if trimmed := strings.TrimSpace(id); trimmed != "" {
+				mangaIDs = append(mangaIDs, trimmed)
+			}
+		}
 	}
 
 	payload, _ := json.Marshal(map[string]any{"type": "register", "manga_ids": mangaIDs})
@@ -52,7 +56,11 @@ func main() {
 		conn.Close()
 	}()
 
-	fmt.Printf("subscribed to %v — waiting for notifications (Ctrl+C to quit)...\n", mangaIDs)
+	sub := "all manga"
+	if len(mangaIDs) > 0 {
+		sub = strings.Join(mangaIDs, ", ")
+	}
+	fmt.Printf("subscribed to %s — waiting for notifications (Ctrl+C to quit)...\n", sub)
 
 	buf := make([]byte, 4096)
 	for {
