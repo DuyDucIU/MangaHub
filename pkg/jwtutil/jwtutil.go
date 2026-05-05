@@ -29,7 +29,10 @@ func ValidateToken(tokenStr, secret string) (Claims, error) {
 		}
 		return []byte(secret), nil
 	})
-	if err != nil || !token.Valid {
+	if err != nil {
+		return Claims{}, fmt.Errorf("invalid token: %w", err)
+	}
+	if !token.Valid {
 		return Claims{}, fmt.Errorf("invalid token")
 	}
 	m, ok := token.Claims.(jwt.MapClaims)
@@ -40,6 +43,6 @@ func ValidateToken(tokenStr, secret string) (Claims, error) {
 	if userID == "" {
 		return Claims{}, fmt.Errorf("missing user_id claim")
 	}
-	username, _ := m["username"].(string)
+	username, _ := m["username"].(string) // optional; callers may fall back to UserID
 	return Claims{UserID: userID, Username: username}, nil
 }
