@@ -3,15 +3,13 @@ package tcp
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
-	"os"
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
+	"mangahub/pkg/jwtutil"
 )
 
 // ProgressUpdate is the message sent to TCP clients when a user's reading progress changes.
@@ -176,11 +174,12 @@ func (s *ProgressSyncServer) handleConn(conn net.Conn) {
 
 	conn.SetDeadline(time.Time{}) // clear deadline after auth attempt
 
-	userID, err := validateJWT(msg.Token)
+	claims, err := jwtutil.ValidateToken(msg.Token, jwtutil.DefaultSecret())
 	if err != nil {
 		writeMsg(conn, serverMsg{Type: "auth_error", Message: "invalid token"}) //nolint:errcheck
 		return
 	}
+	userID := claims.UserID
 
 	s.Register(userID, conn)
 	defer s.Unregister(userID)
@@ -216,27 +215,3 @@ func writeMsg(conn net.Conn, msg serverMsg) error {
 	return err
 }
 
-func validateJWT(tokenStr string) (string, error) {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "mangahub-dev-secret"
-	}
-	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
-		return []byte(secret), nil
-	})
-	if err != nil || !token.Valid {
-		return "", fmt.Errorf("invalid token")
-	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return "", fmt.Errorf("invalid claims")
-	}
-	userID, ok := claims["user_id"].(string)
-	if !ok || userID == "" {
-		return "", fmt.Errorf("missing user_id claim")
-	}
-	return userID, nil
-}
