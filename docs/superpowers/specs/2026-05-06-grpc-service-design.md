@@ -83,9 +83,11 @@ message GetMangaRequest {
 }
 
 message SearchRequest {
-    string q      = 1;
-    string genre  = 2;
-    string status = 3;
+    string q         = 1;
+    string genre     = 2;
+    string status    = 3;
+    int32  page      = 4;  // 1-based, default 1
+    int32  page_size = 5;  // default 20
 }
 
 message ProgressRequest {
@@ -107,7 +109,8 @@ message MangaResponse {
 
 message SearchResponse {
     repeated MangaResponse results = 1;
-    int32                  count   = 2;
+    int32                  count   = 2;  // results on this page
+    int32                  total   = 3;  // total matching rows (UC-015: paginated results)
 }
 
 message ProgressResponse {
@@ -118,7 +121,9 @@ message ProgressResponse {
 ```
 
 - All RPCs are unary (no streaming) as required by the spec
-- `SearchRequest` mirrors the same 3 filters (`q`, `genre`, `status`) as `GET /manga`
+- `SearchRequest` mirrors the same 3 filters (`q`, `genre`, `status`) as `GET /manga`, plus `page` and `page_size` for pagination
+- `SearchResponse.total` is the full match count before pagination; `count` is the number of results returned on this page — satisfies UC-015 step 5 ("paginated results")
+- HTTP `GET /manga` gains the same `page`/`page_size` query params so both layers are consistent
 - `ProgressResponse` echoes back the updated fields, matching what `PUT /users/progress` currently returns
 - No TLS — insecure credentials (localhost demo environment)
 
@@ -169,7 +174,7 @@ Only 3 handler methods change. Everything else is untouched.
 | Handler | Method | Change |
 |---|---|---|
 | `manga.Handler` | `GetByID` | calls `GRPCClient.GetManga(id)` |
-| `manga.Handler` | `Search` | calls `GRPCClient.SearchManga(q, genre, status)` |
+| `manga.Handler` | `Search` | calls `GRPCClient.SearchManga(q, genre, status, page, pageSize)`, adds `page`/`page_size` query params |
 | `user.Handler` | `UpdateProgress` | calls `GRPCClient.UpdateProgress(userID, mangaID, chapter, status)` |
 
 `manga.Handler` keeps its `DB` field for the `Create` endpoint.  
