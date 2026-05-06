@@ -14,7 +14,8 @@ const (
 	writeWait  = 10 * time.Second // max time to write a frame to the client
 	pongWait   = 60 * time.Second // max time to wait for a pong from the client
 	pingPeriod = 54 * time.Second // send ping at this interval (must be < pongWait)
-	maxMsgSize = 512              // max bytes for an inbound message
+	maxMsgSize = 512              // max user chat message length (logical limit)
+	readLimit  = 4096             // TCP read buffer safety cap — must be >= maxMsgSize
 )
 
 // Client represents a single connected WebSocket user.
@@ -40,7 +41,7 @@ func (c *Client) readPump() {
 		}
 		c.conn.Close()
 	}()
-	c.conn.SetReadLimit(maxMsgSize)
+	c.conn.SetReadLimit(readLimit)
 
 	authTimeout := 10 * time.Second
 	if c.authTimeout > 0 {
@@ -86,6 +87,20 @@ func (c *Client) readPump() {
 				return nil
 			})
 			c.hub.register <- c
+			continue
+		}
+
+		// Enforce logical message size limit — return error to sender, keep connection open.
+		if len(raw) > maxMsgSize {
+			errData, _ := json.Marshal(ChatMessage{
+				Type:      "error",
+				Message:   "message too long",
+				Timestamp: time.Now().Unix(),
+			})
+			select {
+			case c.send <- errData:
+			default:
+			}
 			continue
 		}
 

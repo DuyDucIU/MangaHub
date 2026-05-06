@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -126,6 +127,49 @@ func TestHandler_ValidToken_InAuthMessage_RegistersUser(t *testing.T) {
 	assert.Equal(t, "join", msg.Type)
 	assert.Equal(t, "usr_abc", msg.UserID)
 	assert.Equal(t, "one-piece", msg.RoomID)
+}
+
+// TestHandler_MessageTooLong_SendsErrorWithoutDisconnect verifies that a message
+// exceeding maxMsgSize returns an error event to the sender without closing the connection.
+func TestHandler_MessageTooLong_SendsErrorWithoutDisconnect(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	h := &Handler{Hub: hub, JWTSecret: handlerTestSecret, AuthTimeout: 500 * time.Millisecond}
+
+	watcher := newTestClient(hub, "one-piece", "watcher")
+	hub.register <- watcher
+
+	srv := httptest.NewServer(setupHandlerRouter(h))
+	defer srv.Close()
+
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/chat?manga_id=one-piece"
+	conn, _, err := gorillaws.DefaultDialer.Dial(url, nil)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer conn.Close()
+
+	tok := signHandlerToken("usr_abc", "alice")
+	conn.WriteJSON(map[string]string{"token": tok})
+	recv(t, watcher) // wait for join — confirms auth complete and client is in hub
+
+	// Send a message longer than maxMsgSize (512 bytes).
+	conn.WriteMessage(gorillaws.TextMessage, []byte(strings.Repeat("a", 513)))
+
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_, data, err := conn.ReadMessage()
+	if !assert.NoError(t, err, "connection must stay open on oversized message") {
+		return
+	}
+	var response ChatMessage
+	json.Unmarshal(data, &response)
+	assert.Equal(t, "error", response.Type)
+
+	// Connection still alive — normal messages still go through.
+	conn.WriteMessage(gorillaws.TextMessage, []byte("hello"))
+	msg := recv(t, watcher)
+	assert.Equal(t, "message", msg.Type)
+	assert.Equal(t, "hello", msg.Message)
 }
 
 // TestHandler_NoMangaID_JoinsGeneralRoom verifies that omitting manga_id places
