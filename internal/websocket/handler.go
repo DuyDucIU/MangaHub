@@ -3,10 +3,10 @@ package websocket
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	gorillaws "github.com/gorilla/websocket"
-	"mangahub/pkg/jwtutil"
 )
 
 var upgrader = gorillaws.Upgrader{
@@ -17,32 +17,18 @@ var upgrader = gorillaws.Upgrader{
 
 // Handler wires the ChatHub into the Gin router.
 type Handler struct {
-	Hub       *ChatHub
-	JWTSecret string
+	Hub         *ChatHub
+	JWTSecret   string
+	AuthTimeout time.Duration // 0 → defaults to 10s in readPump
 }
 
-// ServeWS handles GET /ws/chat?token=<jwt>&manga_id=<id>.
-// It validates the JWT, upgrades the connection, and hands off to the hub.
+// ServeWS handles GET /ws/chat?manga_id=<id>.
+// The connection is upgraded immediately; the client must send
+// {"token":"<jwt>"} as its first message to authenticate.
 func (h *Handler) ServeWS(c *gin.Context) {
-	token := c.Query("token")
-	if token == "" {
-		c.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-	claims, err := jwtutil.ValidateToken(token, h.JWTSecret)
-	if err != nil {
-		c.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-
 	mangaID := c.Query("manga_id")
 	if mangaID == "" {
 		mangaID = "general"
-	}
-
-	username := claims.Username
-	if username == "" {
-		username = claims.UserID // fallback for tokens without username claim
 	}
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -52,14 +38,13 @@ func (h *Handler) ServeWS(c *gin.Context) {
 	}
 
 	client := &Client{
-		hub:      h.Hub,
-		conn:     conn,
-		send:     make(chan []byte, 256),
-		userID:   claims.UserID,
-		username: username,
-		roomID:   mangaID,
+		hub:         h.Hub,
+		conn:        conn,
+		send:        make(chan []byte, 256),
+		roomID:      mangaID,
+		jwtSecret:   h.JWTSecret,
+		authTimeout: h.AuthTimeout,
 	}
-	h.Hub.register <- client
 
 	go client.writePump()
 	go client.readPump()

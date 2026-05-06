@@ -7,6 +7,7 @@ import (
 	"time"
 
 	gorillaws "github.com/gorilla/websocket"
+	"mangahub/pkg/jwtutil"
 )
 
 const (
@@ -18,37 +19,81 @@ const (
 
 // Client represents a single connected WebSocket user.
 type Client struct {
-	hub      *ChatHub
-	conn     *gorillaws.Conn
-	send     chan []byte // hub writes here; writePump drains it
-	userID   string
-	username string
-	roomID   string
+	hub         *ChatHub
+	conn        *gorillaws.Conn
+	send        chan []byte // hub writes here; writePump drains it
+	userID      string
+	username    string
+	roomID      string
+	jwtSecret   string
+	authTimeout time.Duration // 0 → defaults to 10s
+	authed      bool
 }
 
 // readPump pumps inbound messages from the WebSocket to the hub's broadcast channel.
-// Runs in its own goroutine; on return it unregisters the client.
+// The first message must be {"token":"<jwt>"} to authenticate; subsequent messages
+// are broadcast as chat. Runs in its own goroutine.
 func (c *Client) readPump() {
 	defer func() {
-		c.hub.unregister <- c
+		if c.authed {
+			c.hub.unregister <- c
+		}
 		c.conn.Close()
 	}()
 	c.conn.SetReadLimit(maxMsgSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
-		return nil
-	})
+
+	authTimeout := 10 * time.Second
+	if c.authTimeout > 0 {
+		authTimeout = c.authTimeout
+	}
+	c.conn.SetReadDeadline(time.Now().Add(authTimeout))
+
 	for {
 		_, raw, err := c.conn.ReadMessage()
 		if err != nil {
+			if !c.authed {
+				close(c.send) // terminate writePump — hub never registered this client
+			}
 			break
 		}
+
+		if !c.authed {
+			var authMsg struct {
+				Token string `json:"token"`
+			}
+			if err := json.Unmarshal(raw, &authMsg); err != nil || authMsg.Token == "" {
+				c.conn.WriteMessage(gorillaws.CloseMessage,
+					gorillaws.FormatCloseMessage(4001, "auth required"))
+				close(c.send)
+				return
+			}
+			claims, err := jwtutil.ValidateToken(authMsg.Token, c.jwtSecret)
+			if err != nil {
+				c.conn.WriteMessage(gorillaws.CloseMessage,
+					gorillaws.FormatCloseMessage(4001, "invalid token"))
+				close(c.send)
+				return
+			}
+			c.userID = claims.UserID
+			c.username = claims.Username
+			if c.username == "" {
+				c.username = c.userID
+			}
+			c.authed = true
+			c.conn.SetReadDeadline(time.Now().Add(pongWait))
+			c.conn.SetPongHandler(func(string) error {
+				c.conn.SetReadDeadline(time.Now().Add(pongWait))
+				return nil
+			})
+			c.hub.register <- c
+			continue
+		}
+
+		// Accept plain text or {"message":"..."} JSON.
 		text := strings.TrimSpace(string(raw))
 		if text == "" {
 			continue
 		}
-		// Accept plain text or {"message":"..."} JSON.
 		var in struct {
 			Message string `json:"message"`
 		}
