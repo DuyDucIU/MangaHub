@@ -8,6 +8,7 @@ import (
 	"mangahub/internal/auth"
 	"mangahub/internal/manga"
 	"mangahub/internal/user"
+	wschat "mangahub/internal/websocket"
 	"mangahub/pkg/database"
 )
 
@@ -31,6 +32,10 @@ func main() {
 	mangaHandler := &manga.Handler{DB: db}
 	userHandler := &user.Handler{DB: db}
 
+	hub := wschat.NewHub()
+	go hub.Run()
+	wsHandler := &wschat.Handler{Hub: hub, JWTSecret: jwtSecret}
+
 	r := gin.Default()
 
 	r.POST("/auth/register", authHandler.Register)
@@ -38,6 +43,7 @@ func main() {
 
 	r.GET("/manga", mangaHandler.Search)
 	r.GET("/manga/:id", mangaHandler.GetByID)
+	r.GET("/ws/chat", wsHandler.ServeWS)
 
 	protected := r.Group("/")
 	protected.Use(authHandler.JWTMiddleware())
