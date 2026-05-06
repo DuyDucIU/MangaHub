@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
 	gorillaws "github.com/gorilla/websocket"
@@ -43,18 +44,23 @@ func (c *Client) readPump() {
 		if err != nil {
 			break
 		}
+		text := strings.TrimSpace(string(raw))
+		if text == "" {
+			continue
+		}
+		// Accept plain text or {"message":"..."} JSON.
 		var in struct {
 			Message string `json:"message"`
 		}
-		if err := json.Unmarshal(raw, &in); err != nil || in.Message == "" {
-			continue
+		if err := json.Unmarshal(raw, &in); err == nil && in.Message != "" {
+			text = in.Message
 		}
 		c.hub.broadcast <- ChatMessage{
 			Type:      "message",
 			UserID:    c.userID,
 			Username:  c.username,
 			RoomID:    c.roomID,
-			Message:   in.Message,
+			Message:   text,
 			Timestamp: time.Now().Unix(),
 		}
 	}
