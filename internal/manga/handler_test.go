@@ -22,13 +22,26 @@ type mockMangaGRPC struct {
 	list   []models.Manga
 	total  int
 	err    error
+	// spy fields
+	lastSearchQ      string
+	lastSearchGenre  string
+	lastSearchStatus string
+	lastSearchPage   int
+	lastSearchSize   int
+	lastGetID        string
 }
 
-func (m *mockMangaGRPC) GetManga(_ context.Context, _ string) (*models.Manga, error) {
+func (m *mockMangaGRPC) GetManga(_ context.Context, id string) (*models.Manga, error) {
+	m.lastGetID = id
 	return m.manga, m.err
 }
 
-func (m *mockMangaGRPC) SearchManga(_ context.Context, _, _, _ string, _, _ int) ([]models.Manga, int, error) {
+func (m *mockMangaGRPC) SearchManga(_ context.Context, q, genre, statusFilter string, page, pageSize int) ([]models.Manga, int, error) {
+	m.lastSearchQ = q
+	m.lastSearchGenre = genre
+	m.lastSearchStatus = statusFilter
+	m.lastSearchPage = page
+	m.lastSearchSize = pageSize
 	return m.list, m.total, m.err
 }
 
@@ -113,7 +126,8 @@ func authReq(r *gin.Engine, method, path, body, token string) *httptest.Response
 // GET /manga
 
 func TestSearch_ReturnsResults(t *testing.T) {
-	r, _ := setupMangaRouter(t)
+	mock := defaultMock()
+	r, _ := setupMangaRouterWithMock(t, mock)
 	req := httptest.NewRequest(http.MethodGet, "/manga?q=one", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -126,10 +140,14 @@ func TestSearch_ReturnsResults(t *testing.T) {
 	if count, ok := resp["count"].(float64); !ok || count == 0 {
 		t.Error("expected at least 1 result")
 	}
+	if mock.lastSearchQ != "one" {
+		t.Errorf("expected q='one' forwarded to gRPC, got %q", mock.lastSearchQ)
+	}
 }
 
 func TestSearch_ReturnsPaginationFields(t *testing.T) {
-	r, _ := setupMangaRouter(t)
+	mock := defaultMock()
+	r, _ := setupMangaRouterWithMock(t, mock)
 	req := httptest.NewRequest(http.MethodGet, "/manga?page=1&page_size=10", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -144,6 +162,12 @@ func TestSearch_ReturnsPaginationFields(t *testing.T) {
 	}
 	if _, ok := resp["page"]; !ok {
 		t.Error("expected 'page' field in response")
+	}
+	if mock.lastSearchPage != 1 {
+		t.Errorf("expected page=1 forwarded to gRPC, got %d", mock.lastSearchPage)
+	}
+	if mock.lastSearchSize != 10 {
+		t.Errorf("expected page_size=10 forwarded to gRPC, got %d", mock.lastSearchSize)
 	}
 }
 
@@ -169,12 +193,16 @@ func TestSearch_GRPCError_Returns500(t *testing.T) {
 }
 
 func TestSearch_GenreFilter(t *testing.T) {
-	r, _ := setupMangaRouter(t)
+	mock := defaultMock()
+	r, _ := setupMangaRouterWithMock(t, mock)
 	req := httptest.NewRequest(http.MethodGet, "/manga?genre=Shounen", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if mock.lastSearchGenre != "Shounen" {
+		t.Errorf("expected genre 'Shounen' forwarded to gRPC, got %q", mock.lastSearchGenre)
 	}
 }
 
