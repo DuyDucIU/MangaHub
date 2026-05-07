@@ -4,6 +4,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
 	grpclib "google.golang.org/grpc"
 	mangagrpc "mangahub/internal/grpc"
@@ -30,6 +32,14 @@ func main() {
 
 	s := grpclib.NewServer()
 	pb.RegisterMangaServiceServer(s, &mangagrpc.Service{DB: db})
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-quit
+		log.Println("gRPC server shutting down...")
+		s.GracefulStop()
+	}()
 
 	log.Println("gRPC server listening on :50051")
 	if err := s.Serve(lis); err != nil {
