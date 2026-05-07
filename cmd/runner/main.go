@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -32,13 +33,13 @@ func getenv(key, fallback string) string {
 }
 
 func main() {
-	jwtSecret   := getenv("JWT_SECRET", "mangahub-dev-secret")
-	dbPath      := getenv("DB_PATH", "./data/mangahub.db")
-	grpcAddr    := getenv("GRPC_ADDR", "localhost:50051")
-	grpcPort    := getenv("GRPC_PORT", "50051")
-	tcpPort     := getenv("TCP_PORT", "9090")
+	jwtSecret := getenv("JWT_SECRET", "mangahub-dev-secret")
+	dbPath := getenv("DB_PATH", "./data/mangahub.db")
+	grpcAddr := getenv("GRPC_ADDR", "localhost:50051")
+	grpcPort := getenv("GRPC_PORT", "50051")
+	tcpPort := getenv("TCP_PORT", "9090")
 	tcpInternal := getenv("TCP_INTERNAL_ADDR", ":9099")
-	udpPort     := getenv("UDP_PORT", "9091")
+	udpPort := getenv("UDP_PORT", "9091")
 	udpInternal := getenv("UDP_INTERNAL_ADDR", ":9094")
 
 	db, err := database.Connect(dbPath)
@@ -103,25 +104,25 @@ func main() {
 	hub := wschat.NewHub()
 	go hub.Run()
 
-	authHandler  := &auth.Handler{DB: db, JWTSecret: jwtSecret}
+	authHandler := &auth.Handler{DB: db, JWTSecret: jwtSecret}
 	mangaHandler := &manga.Handler{DB: db, GRPCClient: grpcClient}
-	userHandler  := &user.Handler{DB: db, GRPCClient: grpcClient}
-	wsHandler    := &wschat.Handler{Hub: hub, JWTSecret: jwtSecret}
+	userHandler := &user.Handler{DB: db, GRPCClient: grpcClient}
+	wsHandler := &wschat.Handler{Hub: hub, JWTSecret: jwtSecret}
 
 	r := gin.Default()
-	r.POST("/auth/register",            authHandler.Register)
-	r.POST("/auth/login",               authHandler.Login)
-	r.GET("/manga",                     mangaHandler.Search)
-	r.GET("/manga/:id",                 mangaHandler.GetByID)
-	r.GET("/ws/chat",                   wsHandler.ServeWS)
+	r.POST("/auth/register", authHandler.Register)
+	r.POST("/auth/login", authHandler.Login)
+	r.GET("/manga", mangaHandler.Search)
+	r.GET("/manga/:id", mangaHandler.GetByID)
+	r.GET("/ws/chat", wsHandler.ServeWS)
 
 	protected := r.Group("/")
 	protected.Use(authHandler.JWTMiddleware())
-	protected.POST("/manga",                     mangaHandler.Create)
-	protected.POST("/users/library",             userHandler.AddToLibrary)
-	protected.GET("/users/library",              userHandler.GetLibrary)
+	protected.POST("/manga", mangaHandler.Create)
+	protected.POST("/users/library", userHandler.AddToLibrary)
+	protected.GET("/users/library", userHandler.GetLibrary)
 	protected.DELETE("/users/library/:manga_id", userHandler.RemoveFromLibrary)
-	protected.PUT("/users/progress",             userHandler.UpdateProgress)
+	protected.PUT("/users/progress", userHandler.UpdateProgress)
 
 	httpSrv := &http.Server{Addr: ":8080", Handler: r}
 	go func() {
@@ -140,12 +141,15 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	httpSrv.Shutdown(ctx)  //nolint:errcheck
+	var wg sync.WaitGroup
+	for _, srv := range []*http.Server{httpSrv, tcpHTTP, udpHTTP} {
+		wg.Add(1)
+		go func(s *http.Server) { defer wg.Done(); s.Shutdown(ctx) }(srv) //nolint:errcheck
+	}
 	grpcSrv.GracefulStop()
 	tcpSrv.Shutdown()
-	tcpHTTP.Shutdown(ctx)  //nolint:errcheck
 	udpSrv.Shutdown()
-	udpHTTP.Shutdown(ctx)  //nolint:errcheck
+	wg.Wait()
 
 	log.Println("[runner] stopped")
 }
