@@ -2,7 +2,9 @@ package manga_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,15 +13,64 @@ import (
 	"mangahub/internal/auth"
 	"mangahub/internal/manga"
 	"mangahub/pkg/database"
+	"mangahub/pkg/models"
 )
 
-func setupMangaRouter(t *testing.T) (*gin.Engine, string) {
+// mockMangaGRPC implements manga.MangaGRPCClient for tests.
+type mockMangaGRPC struct {
+	manga  *models.Manga
+	list   []models.Manga
+	total  int
+	err    error
+	// spy fields
+	lastSearchQ      string
+	lastSearchGenre  string
+	lastSearchStatus string
+	lastSearchPage   int
+	lastSearchSize   int
+	lastGetID        string
+}
+
+func (m *mockMangaGRPC) GetManga(_ context.Context, id string) (*models.Manga, error) {
+	m.lastGetID = id
+	return m.manga, m.err
+}
+
+func (m *mockMangaGRPC) SearchManga(_ context.Context, q, genre, statusFilter string, page, pageSize int) ([]models.Manga, int, error) {
+	m.lastSearchQ = q
+	m.lastSearchGenre = genre
+	m.lastSearchStatus = statusFilter
+	m.lastSearchPage = page
+	m.lastSearchSize = pageSize
+	return m.list, m.total, m.err
+}
+
+var defaultMangaData = &models.Manga{
+	ID:            "one-piece",
+	Title:         "One Piece",
+	Author:        "Oda Eiichiro",
+	Genres:        []string{"Action", "Shounen"},
+	Status:        "ongoing",
+	TotalChapters: 1100,
+	Description:   "Pirates!",
+}
+
+func defaultMock() *mockMangaGRPC {
+	return &mockMangaGRPC{
+		manga: defaultMangaData,
+		list:  []models.Manga{*defaultMangaData},
+		total: 1,
+	}
+}
+
+func setupMangaRouterWithMock(t *testing.T, grpcMock manga.MangaGRPCClient) (*gin.Engine, string) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db, err := database.Connect(":memory:")
 	if err != nil {
 		t.Fatalf("db connect: %v", err)
 	}
+	// DB still seeded — needed for Create tests
 	_, err = db.Exec(`INSERT INTO manga (id, title, author, genres, status, total_chapters, description)
 		VALUES ('one-piece', 'One Piece', 'Oda Eiichiro', '["Action","Shounen"]', 'ongoing', 1100, 'Pirates!')`)
 	if err != nil {
@@ -28,7 +79,7 @@ func setupMangaRouter(t *testing.T) (*gin.Engine, string) {
 	t.Cleanup(func() { db.Close() })
 
 	authH := &auth.Handler{DB: db, JWTSecret: "test-secret"}
-	h := &manga.Handler{DB: db}
+	h := &manga.Handler{DB: db, GRPCClient: grpcMock}
 
 	r := gin.New()
 	r.POST("/auth/register", authH.Register)
@@ -47,6 +98,10 @@ func setupMangaRouter(t *testing.T) (*gin.Engine, string) {
 	protected.POST("/manga", h.Create)
 
 	return r, token
+}
+
+func setupMangaRouter(t *testing.T) (*gin.Engine, string) {
+	return setupMangaRouterWithMock(t, defaultMock())
 }
 
 func doPost(r *gin.Engine, path, body string) *httptest.ResponseRecorder {
@@ -71,7 +126,8 @@ func authReq(r *gin.Engine, method, path, body, token string) *httptest.Response
 // GET /manga
 
 func TestSearch_ReturnsResults(t *testing.T) {
-	r, _ := setupMangaRouter(t)
+	mock := defaultMock()
+	r, _ := setupMangaRouterWithMock(t, mock)
 	req := httptest.NewRequest(http.MethodGet, "/manga?q=one", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -84,6 +140,35 @@ func TestSearch_ReturnsResults(t *testing.T) {
 	if count, ok := resp["count"].(float64); !ok || count == 0 {
 		t.Error("expected at least 1 result")
 	}
+	if mock.lastSearchQ != "one" {
+		t.Errorf("expected q='one' forwarded to gRPC, got %q", mock.lastSearchQ)
+	}
+}
+
+func TestSearch_ReturnsPaginationFields(t *testing.T) {
+	mock := defaultMock()
+	r, _ := setupMangaRouterWithMock(t, mock)
+	req := httptest.NewRequest(http.MethodGet, "/manga?page=1&page_size=10", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["total"]; !ok {
+		t.Error("expected 'total' field in response")
+	}
+	if _, ok := resp["page"]; !ok {
+		t.Error("expected 'page' field in response")
+	}
+	if mock.lastSearchPage != 1 {
+		t.Errorf("expected page=1 forwarded to gRPC, got %d", mock.lastSearchPage)
+	}
+	if mock.lastSearchSize != 10 {
+		t.Errorf("expected page_size=10 forwarded to gRPC, got %d", mock.lastSearchSize)
+	}
 }
 
 func TestSearch_EmptyQuery_ReturnsAll(t *testing.T) {
@@ -91,25 +176,33 @@ func TestSearch_EmptyQuery_ReturnsAll(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/manga", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
 
+func TestSearch_GRPCError_Returns500(t *testing.T) {
+	mock := &mockMangaGRPC{err: errors.New("grpc unavailable")}
+	r, _ := setupMangaRouterWithMock(t, mock)
+	req := httptest.NewRequest(http.MethodGet, "/manga", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
 func TestSearch_GenreFilter(t *testing.T) {
-	r, _ := setupMangaRouter(t)
+	mock := defaultMock()
+	r, _ := setupMangaRouterWithMock(t, mock)
 	req := httptest.NewRequest(http.MethodGet, "/manga?genre=Shounen", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
-	if count, _ := resp["count"].(float64); count == 0 {
-		t.Error("expected at least 1 shounen result")
+	if mock.lastSearchGenre != "Shounen" {
+		t.Errorf("expected genre 'Shounen' forwarded to gRPC, got %q", mock.lastSearchGenre)
 	}
 }
 
@@ -130,17 +223,17 @@ func TestGetByID_Found(t *testing.T) {
 }
 
 func TestGetByID_NotFound(t *testing.T) {
-	r, _ := setupMangaRouter(t)
+	mock := &mockMangaGRPC{err: models.ErrNotFound}
+	r, _ := setupMangaRouterWithMock(t, mock)
 	req := httptest.NewRequest(http.MethodGet, "/manga/nonexistent", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }
 
-// POST /manga
+// POST /manga (unchanged — still uses DB)
 
 func TestCreateManga_Success(t *testing.T) {
 	r, token := setupMangaRouter(t)

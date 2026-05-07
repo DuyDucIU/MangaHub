@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"mangahub/internal/auth"
+	mangagrpc "mangahub/internal/grpc"
 	"mangahub/internal/manga"
 	"mangahub/internal/user"
 	wschat "mangahub/internal/websocket"
@@ -18,7 +19,16 @@ func main() {
 		jwtSecret = "mangahub-dev-secret"
 	}
 
-	db, err := database.Connect("./data/mangahub.db")
+	grpcAddr := os.Getenv("GRPC_ADDR")
+	if grpcAddr == "" {
+		grpcAddr = "localhost:50051"
+	}
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./data/mangahub.db"
+	}
+	db, err := database.Connect(dbPath)
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}
@@ -28,9 +38,16 @@ func main() {
 		log.Printf("seed warning: %v", err)
 	}
 
+	grpcClient, err := mangagrpc.NewClient(grpcAddr)
+	if err != nil {
+		log.Fatalf("grpc client: %v", err)
+	}
+	defer grpcClient.Close() //nolint:errcheck
+	log.Printf("gRPC client connected to %s", grpcAddr)
+
 	authHandler := &auth.Handler{DB: db, JWTSecret: jwtSecret}
-	mangaHandler := &manga.Handler{DB: db}
-	userHandler := &user.Handler{DB: db}
+	mangaHandler := &manga.Handler{DB: db, GRPCClient: grpcClient}
+	userHandler := &user.Handler{DB: db, GRPCClient: grpcClient}
 
 	hub := wschat.NewHub()
 	go hub.Run()

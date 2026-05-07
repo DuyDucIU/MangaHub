@@ -22,6 +22,9 @@ func Connect(path string) (*sql.DB, error) {
 	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
 		return nil, fmt.Errorf("pragma journal_mode: %w", err)
 	}
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		return nil, fmt.Errorf("pragma busy_timeout: %w", err)
+	}
 	if err := createTables(db); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
 	}
