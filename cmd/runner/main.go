@@ -146,7 +146,13 @@ func main() {
 		wg.Add(1)
 		go func(s *http.Server) { defer wg.Done(); s.Shutdown(ctx) }(srv) //nolint:errcheck
 	}
-	grpcSrv.GracefulStop()
+	grpcDone := make(chan struct{})
+	go func() { grpcSrv.GracefulStop(); close(grpcDone) }()
+	select {
+	case <-grpcDone:
+	case <-ctx.Done():
+		grpcSrv.Stop()
+	}
 	tcpSrv.Shutdown()
 	udpSrv.Shutdown()
 	wg.Wait()
