@@ -109,9 +109,6 @@ func (s *Service) SearchManga(ctx context.Context, req *pb.SearchRequest) (*pb.S
 		end = total
 	}
 	pageResults := all[start:end]
-	if pageResults == nil {
-		pageResults = []*pb.MangaResponse{}
-	}
 	return &pb.SearchResponse{Results: pageResults, Count: int32(len(pageResults)), Total: total}, nil
 }
 
