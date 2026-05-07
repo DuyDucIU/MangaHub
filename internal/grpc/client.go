@@ -38,7 +38,7 @@ func (c *Client) GetManga(ctx context.Context, id string) (*models.Manga, error)
 	resp, err := c.svc.GetManga(ctx, &pb.GetMangaRequest{Id: id})
 	if err != nil {
 		if grpcstatus.Code(err) == grpccodes.NotFound {
-			return nil, models.ErrNotFound
+			return nil, fmt.Errorf("%w: %s", models.ErrNotFound, grpcstatus.Convert(err).Message())
 		}
 		return nil, err
 	}
@@ -55,9 +55,9 @@ func (c *Client) GetManga(ctx context.Context, id string) (*models.Manga, error)
 
 // SearchManga searches manga with optional filters and pagination.
 // Returns (results, total, error) where total is the full match count before paging.
-func (c *Client) SearchManga(ctx context.Context, q, genre, statusFilter string, page, pageSize int32) ([]models.Manga, int32, error) {
+func (c *Client) SearchManga(ctx context.Context, q, genre, statusFilter string, page, pageSize int) ([]models.Manga, int, error) {
 	resp, err := c.svc.SearchManga(ctx, &pb.SearchRequest{
-		Q: q, Genre: genre, Status: statusFilter, Page: page, PageSize: pageSize,
+		Q: q, Genre: genre, Status: statusFilter, Page: int32(page), PageSize: int32(pageSize),
 	})
 	if err != nil {
 		return nil, 0, err
@@ -74,7 +74,7 @@ func (c *Client) SearchManga(ctx context.Context, q, genre, statusFilter string,
 			Description:   r.Description,
 		})
 	}
-	return out, resp.Total, nil
+	return out, int(resp.Total), nil
 }
 
 // UpdateProgress updates reading progress.
@@ -87,13 +87,14 @@ func (c *Client) UpdateProgress(ctx context.Context, userID, mangaID string, cha
 	if err != nil {
 		switch grpcstatus.Code(err) {
 		case grpccodes.NotFound:
-			return nil, models.ErrNotFound
+			return nil, fmt.Errorf("%w: %s", models.ErrNotFound, grpcstatus.Convert(err).Message())
 		case grpccodes.InvalidArgument:
 			return nil, fmt.Errorf("%w: %s", models.ErrInvalidArgument, grpcstatus.Convert(err).Message())
 		}
 		return nil, err
 	}
 	return &models.UserProgress{
+		UserID:         userID,
 		MangaID:        resp.MangaId,
 		CurrentChapter: int(resp.CurrentChapter),
 		Status:         resp.Status,

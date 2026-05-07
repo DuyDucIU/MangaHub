@@ -68,7 +68,7 @@ func TestClient_SearchManga_ReturnsResults(t *testing.T) {
 
 	results, total, err := client.SearchManga(context.Background(), "one", "", "", 1, 20)
 	require.NoError(t, err)
-	assert.Equal(t, int32(1), total)
+	assert.Equal(t, 1, total)
 	assert.Len(t, results, 1)
 	assert.Equal(t, "one-piece", results[0].ID)
 }
@@ -79,7 +79,7 @@ func TestClient_SearchManga_EmptyResults(t *testing.T) {
 
 	results, total, err := client.SearchManga(context.Background(), "zzznomatch", "", "", 1, 20)
 	require.NoError(t, err)
-	assert.Equal(t, int32(0), total)
+	assert.Equal(t, 0, total)
 	assert.Empty(t, results)
 }
 
