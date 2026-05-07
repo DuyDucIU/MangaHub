@@ -2,7 +2,9 @@ package user_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,9 +13,40 @@ import (
 	"mangahub/internal/auth"
 	"mangahub/internal/user"
 	"mangahub/pkg/database"
+	"mangahub/pkg/models"
 )
 
-func setupUserRouter(t *testing.T) (*gin.Engine, string) {
+// mockProgressGRPC implements user.ProgressGRPCClient for tests.
+type mockProgressGRPC struct {
+	result *models.UserProgress
+	err    error
+	// spy fields
+	lastUserID  string
+	lastMangaID string
+	lastChapter int32
+	lastStatus  string
+}
+
+func (m *mockProgressGRPC) UpdateProgress(_ context.Context, userID, mangaID string, chapter int32, status string) (*models.UserProgress, error) {
+	m.lastUserID = userID
+	m.lastMangaID = mangaID
+	m.lastChapter = chapter
+	m.lastStatus = status
+	if m.result != nil {
+		m.result.MangaID = mangaID
+		m.result.CurrentChapter = int(chapter)
+		m.result.Status = status
+	}
+	return m.result, m.err
+}
+
+func defaultProgressMock() *mockProgressGRPC {
+	return &mockProgressGRPC{
+		result: &models.UserProgress{},
+	}
+}
+
+func setupUserRouterWithMock(t *testing.T, grpcMock user.ProgressGRPCClient) (*gin.Engine, string) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db, err := database.Connect(":memory:")
@@ -28,7 +61,7 @@ func setupUserRouter(t *testing.T) (*gin.Engine, string) {
 	t.Cleanup(func() { db.Close() })
 
 	authH := &auth.Handler{DB: db, JWTSecret: "test-secret"}
-	userH := &user.Handler{DB: db}
+	userH := &user.Handler{DB: db, GRPCClient: grpcMock}
 
 	r := gin.New()
 	r.POST("/auth/register", authH.Register)
@@ -50,6 +83,10 @@ func setupUserRouter(t *testing.T) (*gin.Engine, string) {
 	return r, token
 }
 
+func setupUserRouter(t *testing.T) (*gin.Engine, string) {
+	return setupUserRouterWithMock(t, defaultProgressMock())
+}
+
 func doPost(r *gin.Engine, path, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -69,7 +106,7 @@ func authReq(r *gin.Engine, method, path, body, token string) *httptest.Response
 	return w
 }
 
-// POST /users/library
+// POST /users/library (unchanged — keep original tests as-is)
 
 func TestAddToLibrary_Success(t *testing.T) {
 	r, token := setupUserRouter(t)
@@ -173,20 +210,34 @@ func TestRemoveFromLibrary_NoAuth(t *testing.T) {
 	}
 }
 
-// PUT /users/progress
+// PUT /users/progress (now via gRPC mock)
 
 func TestUpdateProgress_Success(t *testing.T) {
-	r, token := setupUserRouter(t)
-	authReq(r, http.MethodPost, "/users/library", `{"manga_id":"one-piece","status":"reading","current_chapter":50}`, token)
+	mock := defaultProgressMock()
+	r, token := setupUserRouterWithMock(t, mock)
 	w := authReq(r, http.MethodPut, "/users/progress", `{"manga_id":"one-piece","current_chapter":100}`, token)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["manga_id"] != "one-piece" {
+		t.Errorf("expected manga_id=one-piece, got %v", resp["manga_id"])
+	}
+	// Assert arguments were forwarded to gRPC
+	if mock.lastMangaID != "one-piece" {
+		t.Errorf("expected manga_id='one-piece' forwarded to gRPC, got %q", mock.lastMangaID)
+	}
+	if mock.lastChapter != 100 {
+		t.Errorf("expected chapter=100 forwarded to gRPC, got %d", mock.lastChapter)
+	}
 }
 
 func TestUpdateProgress_ExceedsTotal(t *testing.T) {
-	r, token := setupUserRouter(t)
-	authReq(r, http.MethodPost, "/users/library", `{"manga_id":"one-piece","status":"reading"}`, token)
+	mock := &mockProgressGRPC{
+		err: fmt.Errorf("%w: chapter 9999 exceeds total (1100)", models.ErrInvalidArgument),
+	}
+	r, token := setupUserRouterWithMock(t, mock)
 	w := authReq(r, http.MethodPut, "/users/progress", `{"manga_id":"one-piece","current_chapter":9999}`, token)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -194,7 +245,8 @@ func TestUpdateProgress_ExceedsTotal(t *testing.T) {
 }
 
 func TestUpdateProgress_NotInLibrary(t *testing.T) {
-	r, token := setupUserRouter(t)
+	mock := &mockProgressGRPC{err: models.ErrNotFound}
+	r, token := setupUserRouterWithMock(t, mock)
 	w := authReq(r, http.MethodPut, "/users/progress", `{"manga_id":"one-piece","current_chapter":100}`, token)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
@@ -202,7 +254,8 @@ func TestUpdateProgress_NotInLibrary(t *testing.T) {
 }
 
 func TestUpdateProgress_MangaNotFound(t *testing.T) {
-	r, token := setupUserRouter(t)
+	mock := &mockProgressGRPC{err: models.ErrNotFound}
+	r, token := setupUserRouterWithMock(t, mock)
 	w := authReq(r, http.MethodPut, "/users/progress", `{"manga_id":"nonexistent","current_chapter":1}`, token)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())

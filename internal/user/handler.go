@@ -1,23 +1,24 @@
 package user
 
 import (
-	"bytes"
+	"context"
 	"database/sql"
-	"encoding/json"
-	"fmt"
-	"log"
+	"errors"
 	"net/http"
-	"os"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"mangahub/pkg/models"
 )
 
-type Handler struct {
-	DB *sql.DB
+// ProgressGRPCClient is satisfied by *grpc.Client from internal/grpc.
+type ProgressGRPCClient interface {
+	UpdateProgress(ctx context.Context, userID, mangaID string, chapter int32, newStatus string) (*models.UserProgress, error)
 }
 
-var tcpNotifyClient = &http.Client{Timeout: time.Second}
+type Handler struct {
+	DB         *sql.DB            // used by AddToLibrary, GetLibrary, RemoveFromLibrary
+	GRPCClient ProgressGRPCClient // used by UpdateProgress
+}
 
 var validStatuses = map[string]bool{
 	"reading":      true,
@@ -157,84 +158,24 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 		return
 	}
 
-	var totalChapters int
-	if err := h.DB.QueryRow("SELECT total_chapters FROM manga WHERE id = ?", req.MangaID).Scan(&totalChapters); err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "manga not found"})
-		return
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+	up, err := h.GRPCClient.UpdateProgress(c.Request.Context(), userID, req.MangaID, int32(req.CurrentChapter), req.Status)
+	if errors.Is(err, models.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "manga not found or not in library"})
 		return
 	}
-
-	if totalChapters > 0 && req.CurrentChapter > totalChapters {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("chapter %d exceeds total chapters (%d)", req.CurrentChapter, totalChapters),
-		})
+	if errors.Is(err, models.ErrInvalidArgument) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	var currentStatus string
-	if err := h.DB.QueryRow(
-		"SELECT status FROM user_progress WHERE user_id = ? AND manga_id = ?",
-		userID, req.MangaID,
-	).Scan(&currentStatus); err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "manga not in library, add it first"})
-		return
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
 		return
 	}
-
-	newStatus := currentStatus
-	if req.Status != "" {
-		newStatus = req.Status
-	}
-
-	if _, err := h.DB.Exec(
-		`UPDATE user_progress SET current_chapter = ?, status = ?, updated_at = CURRENT_TIMESTAMP
-		 WHERE user_id = ? AND manga_id = ?`,
-		req.CurrentChapter, newStatus, userID, req.MangaID,
-	); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-		return
-	}
-
-	go notifyTCPServer(userID, req.MangaID, req.CurrentChapter) // fire-and-forget TCP sync
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":         "progress updated",
-		"manga_id":        req.MangaID,
-		"current_chapter": req.CurrentChapter,
-		"status":          newStatus,
+		"manga_id":        up.MangaID,
+		"current_chapter": up.CurrentChapter,
+		"status":          up.Status,
 	})
-}
-
-// notifyTCPServer fires a goroutine that POSTs the progress update to the TCP server's
-// internal broadcast endpoint. Fire-and-forget: HTTP API returns 200 regardless of
-// TCP server availability (UC-006 A2 — progress is already saved to DB).
-func notifyTCPServer(userID, mangaID string, chapter int) {
-	addr := os.Getenv("TCP_INTERNAL_URL")
-	if addr == "" {
-		addr = "http://localhost:9099"
-	}
-	payload, _ := json.Marshal(struct {
-		UserID    string `json:"user_id"`
-		MangaID   string `json:"manga_id"`
-		Chapter   int    `json:"chapter"`
-		Timestamp int64  `json:"timestamp"`
-	}{
-		UserID:    userID,
-		MangaID:   mangaID,
-		Chapter:   chapter,
-		Timestamp: time.Now().Unix(),
-	})
-	resp, err := tcpNotifyClient.Post(addr+"/internal/broadcast", "application/json", bytes.NewReader(payload))
-	if err != nil {
-		log.Printf("user: TCP notify failed: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("user: TCP notify: unexpected status %d", resp.StatusCode)
-	}
 }
