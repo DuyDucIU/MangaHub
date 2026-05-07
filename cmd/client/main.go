@@ -73,7 +73,7 @@ func (a *App) mainMenu() bool {
 	fmt.Println("3. Update reading progress")
 	fmt.Println("4. Add manga to library")
 	fmt.Println("5. Enter chat room")
-	fmt.Println("0. Logout / Exit")
+	fmt.Println("0. Logout")
 	switch a.prompt("> ") {
 	case "1":
 		a.doSearch()
@@ -87,7 +87,7 @@ func (a *App) mainMenu() bool {
 		a.enterChatRoom()
 	case "0":
 		a.doLogout()
-		return false
+		return true
 	default:
 		fmt.Println("Invalid choice.")
 	}
