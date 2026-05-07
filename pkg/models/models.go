@@ -1,6 +1,14 @@
 package models
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var (
+	ErrNotFound        = errors.New("not found")
+	ErrInvalidArgument = errors.New("invalid argument")
+)
 
 type User struct {
 	ID           string    `json:"id"`
