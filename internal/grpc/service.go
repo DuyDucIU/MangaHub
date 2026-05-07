@@ -47,6 +47,10 @@ func (s *Service) SearchManga(ctx context.Context, req *pb.SearchRequest) (*pb.S
 	if pageSize < 1 {
 		pageSize = 20
 	}
+	const maxPageSize = int32(100)
+	if pageSize > maxPageSize {
+		pageSize = maxPageSize
+	}
 
 	query := "SELECT id, title, author, genres, status, total_chapters, description FROM manga WHERE 1=1"
 	args := []interface{}{}
@@ -71,6 +75,7 @@ func (s *Service) SearchManga(ctx context.Context, req *pb.SearchRequest) (*pb.S
 		var m pb.MangaResponse
 		var genresStr string
 		if err := rows.Scan(&m.Id, &m.Title, &m.Author, &genresStr, &m.Status, &m.TotalChapters, &m.Description); err != nil {
+			log.Printf("grpc: SearchManga scan error: %v", err)
 			continue
 		}
 		json.Unmarshal([]byte(genresStr), &m.Genres) //nolint:errcheck
@@ -87,6 +92,9 @@ func (s *Service) SearchManga(ctx context.Context, req *pb.SearchRequest) (*pb.S
 			}
 		}
 		all = append(all, &m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, grpcstatus.Errorf(grpccodes.Internal, "db iteration: %v", err)
 	}
 
 	total := int32(len(all))
