@@ -103,9 +103,11 @@ func (a *App) prompt(p string) string {
 func (a *App) cleanup() {
 	if a.TCPConn != nil {
 		a.TCPConn.Close()
+		a.TCPConn = nil
 	}
 	if a.UDPConn != nil {
 		a.UDPConn.Close()
+		a.UDPConn = nil
 	}
 }
 
