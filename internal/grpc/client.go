@@ -50,6 +50,7 @@ func (c *Client) GetManga(ctx context.Context, id string) (*models.Manga, error)
 		Status:        resp.Status,
 		TotalChapters: int(resp.TotalChapters),
 		Description:   resp.Description,
+		CoverURL:      resp.CoverUrl,
 	}, nil
 }
 
@@ -72,6 +73,7 @@ func (c *Client) SearchManga(ctx context.Context, q, genre, statusFilter string,
 			Status:        r.Status,
 			TotalChapters: int(r.TotalChapters),
 			Description:   r.Description,
+			CoverURL:      r.CoverUrl,
 		})
 	}
 	return out, int(resp.Total), nil

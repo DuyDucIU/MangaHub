@@ -92,6 +92,7 @@ type createMangaRequest struct {
 	Status        string   `json:"status"         binding:"required"`
 	TotalChapters int      `json:"total_chapters" binding:"min=0"`
 	Description   string   `json:"description"`
+	CoverURL      string   `json:"cover_url"`
 }
 
 func (h *Handler) Create(c *gin.Context) {
@@ -118,9 +119,9 @@ func (h *Handler) Create(c *gin.Context) {
 
 	genres, _ := json.Marshal(req.Genres)
 	_, err := h.DB.Exec(
-		`INSERT INTO manga (id, title, author, genres, status, total_chapters, description)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		req.ID, req.Title, req.Author, string(genres), req.Status, req.TotalChapters, req.Description,
+		`INSERT INTO manga (id, title, author, genres, status, total_chapters, description, cover_url)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		req.ID, req.Title, req.Author, string(genres), req.Status, req.TotalChapters, req.Description, req.CoverURL,
 	)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "manga with this ID already exists"})

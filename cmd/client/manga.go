@@ -22,6 +22,7 @@ type mangaItem struct {
 	Status        string   `json:"status"`
 	TotalChapters int      `json:"total_chapters"`
 	Description   string   `json:"description"`
+	CoverURL      string   `json:"cover_url,omitempty"`
 }
 
 type libraryResponse struct {
@@ -114,6 +115,9 @@ func (a *App) doViewDetails(id string) {
 	fmt.Printf("Genres:   %s\n", strings.Join(m.Genres, ", "))
 	fmt.Printf("Status:   %s\n", m.Status)
 	fmt.Printf("Chapters: %d\n", m.TotalChapters)
+	if m.CoverURL != "" {
+		fmt.Printf("Cover:    %s\n", m.CoverURL)
+	}
 	if m.Description != "" {
 		fmt.Printf("\n%s\n", m.Description)
 	}

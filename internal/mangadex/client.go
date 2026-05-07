@@ -60,18 +60,20 @@ type tagAttributes struct {
 }
 
 type relationship struct {
-	Type       string              `json:"type"`
-	Attributes *authorAttributes   `json:"attributes"`
+	ID         string                   `json:"id"`
+	Type       string                   `json:"type"`
+	Attributes *relationshipAttributes  `json:"attributes"`
 }
 
-type authorAttributes struct {
-	Name string `json:"name"`
+type relationshipAttributes struct {
+	Name     string `json:"name"`     // author
+	FileName string `json:"fileName"` // cover_art
 }
 
 // SearchPopular fetches the most-followed manga from MangaDx.
 func (c *Client) SearchPopular(limit int) ([]models.Manga, error) {
 	url := fmt.Sprintf(
-		"%s/manga?limit=%d&order[followedCount]=desc&includes[]=author&contentRating[]=safe&contentRating[]=suggestive",
+		"%s/manga?limit=%d&order[followedCount]=desc&includes[]=author&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive",
 		c.base, limit,
 	)
 
@@ -95,7 +97,7 @@ func (c *Client) SearchPopular(limit int) ([]models.Manga, error) {
 
 // FetchByID fetches a single manga by its MangaDx UUID.
 func (c *Client) FetchByID(mangadexID string) (*models.Manga, error) {
-	url := fmt.Sprintf("%s/manga/%s?includes[]=author", c.base, mangadexID)
+	url := fmt.Sprintf("%s/manga/%s?includes[]=author&includes[]=cover_art", c.base, mangadexID)
 
 	resp, err := c.http.Get(url)
 	if err != nil {
@@ -131,11 +133,12 @@ func mapToModels(data []mangaData) []models.Manga {
 	out := make([]models.Manga, 0, len(data))
 	for _, d := range data {
 		m := models.Manga{
-			ID:     titleToSlug(englishTitle(d.Attributes.Title)),
-			Title:  englishTitle(d.Attributes.Title),
-			Author: extractAuthor(d.Relationships),
-			Genres: extractGenres(d.Attributes.Tags),
-			Status: normalizeStatus(d.Attributes.Status),
+			ID:       titleToSlug(englishTitle(d.Attributes.Title)),
+			Title:    englishTitle(d.Attributes.Title),
+			Author:   extractAuthor(d.Relationships),
+			Genres:   extractGenres(d.Attributes.Tags),
+			Status:   normalizeStatus(d.Attributes.Status),
+			CoverURL: extractCoverURL(d.ID, d.Relationships),
 		}
 		if m.Title == "" || m.ID == "" {
 			continue
@@ -182,6 +185,15 @@ func extractAuthor(rels []relationship) string {
 		}
 	}
 	return "Unknown"
+}
+
+func extractCoverURL(mangaUUID string, rels []relationship) string {
+	for _, r := range rels {
+		if r.Type == "cover_art" && r.Attributes != nil && r.Attributes.FileName != "" {
+			return "https://uploads.mangadex.org/covers/" + mangaUUID + "/" + r.Attributes.FileName
+		}
+	}
+	return ""
 }
 
 func extractGenres(tags []tag) []string {
