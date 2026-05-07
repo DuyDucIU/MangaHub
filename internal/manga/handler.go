@@ -1,14 +1,23 @@
 package manga
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"mangahub/pkg/models"
 )
+
+// MangaGRPCClient is satisfied by *grpc.Client from internal/grpc.
+type MangaGRPCClient interface {
+	GetManga(ctx context.Context, id string) (*models.Manga, error)
+	SearchManga(ctx context.Context, q, genre, statusFilter string, page, pageSize int) ([]models.Manga, int, error)
+}
 
 // AllowedGenres defines the set of accepted genre strings.
 var AllowedGenres = map[string]bool{
@@ -17,7 +26,6 @@ var AllowedGenres = map[string]bool{
 	"Romance": true, "Sci-Fi": true, "Slice of Life": true, "Sports": true,
 	"Supernatural": true, "Thriller": true, "Historical": true, "Music": true,
 	"School": true, "Magic": true, "Fashion": true,
-	// Demographic tags — allowed as genre labels in our data model.
 	"Shounen": true, "Shoujo": true, "Seinen": true, "Josei": true,
 }
 
@@ -27,7 +35,8 @@ var AllowedStatuses = map[string]bool{
 }
 
 type Handler struct {
-	DB *sql.DB
+	DB         *sql.DB         // used by Create
+	GRPCClient MangaGRPCClient // used by GetByID, Search
 }
 
 func (h *Handler) Search(c *gin.Context) {
@@ -35,76 +44,43 @@ func (h *Handler) Search(c *gin.Context) {
 	genre := c.Query("genre")
 	status := c.Query("status")
 
-	query := "SELECT id, title, author, genres, status, total_chapters, description FROM manga WHERE 1=1"
-	args := []interface{}{}
-
-	if q != "" {
-		query += " AND (LOWER(title) LIKE LOWER(?) OR LOWER(author) LIKE LOWER(?))"
-		like := "%" + q + "%"
-		args = append(args, like, like)
+	page := 1
+	pageSize := 20
+	if p, err := strconv.Atoi(c.DefaultQuery("page", "1")); err == nil && p > 0 {
+		page = p
 	}
-	if status != "" {
-		query += " AND status = ?"
-		args = append(args, status)
+	if ps, err := strconv.Atoi(c.DefaultQuery("page_size", "20")); err == nil && ps > 0 {
+		pageSize = ps
 	}
 
-	rows, err := h.DB.Query(query, args...)
+	results, total, err := h.GRPCClient.SearchManga(c.Request.Context(), q, genre, status, page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "search failed"})
 		return
 	}
-	defer rows.Close()
-
-	var results []models.Manga
-	for rows.Next() {
-		var m models.Manga
-		var genresStr string
-		if err := rows.Scan(&m.ID, &m.Title, &m.Author, &genresStr, &m.Status, &m.TotalChapters, &m.Description); err != nil {
-			continue
-		}
-		json.Unmarshal([]byte(genresStr), &m.Genres)
-
-		if genre != "" {
-			match := false
-			for _, g := range m.Genres {
-				if strings.EqualFold(g, genre) {
-					match = true
-					break
-				}
-			}
-			if !match {
-				continue
-			}
-		}
-		results = append(results, m)
-	}
-
 	if results == nil {
 		results = []models.Manga{}
 	}
-	c.JSON(http.StatusOK, gin.H{"results": results, "count": len(results)})
+	c.JSON(http.StatusOK, gin.H{
+		"results":   results,
+		"count":     len(results),
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 func (h *Handler) GetByID(c *gin.Context) {
 	id := c.Param("id")
-	var m models.Manga
-	var genresStr string
-
-	err := h.DB.QueryRow(
-		"SELECT id, title, author, genres, status, total_chapters, description FROM manga WHERE id = ?",
-		id,
-	).Scan(&m.ID, &m.Title, &m.Author, &genresStr, &m.Status, &m.TotalChapters, &m.Description)
-
-	if err == sql.ErrNoRows {
+	m, err := h.GRPCClient.GetManga(c.Request.Context(), id)
+	if errors.Is(err, models.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "manga not found"})
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get manga"})
 		return
 	}
-
-	json.Unmarshal([]byte(genresStr), &m.Genres)
 	c.JSON(http.StatusOK, m)
 }
 
@@ -125,7 +101,6 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	// Validate status.
 	if !AllowedStatuses[strings.ToLower(req.Status)] {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid status; must be one of: ongoing, completed, hiatus",
@@ -134,12 +109,9 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 	req.Status = strings.ToLower(req.Status)
 
-	// Validate each genre.
 	for _, g := range req.Genres {
 		if !AllowedGenres[g] {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "unknown genre: " + g,
-			})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "unknown genre: " + g})
 			return
 		}
 	}
@@ -155,8 +127,5 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "manga created",
-		"id":      req.ID,
-	})
+	c.JSON(http.StatusCreated, gin.H{"message": "manga created", "id": req.ID})
 }
