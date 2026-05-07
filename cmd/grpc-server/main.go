@@ -25,7 +25,11 @@ func main() {
 	}
 	defer db.Close()
 
-	lis, err := net.Listen("tcp", ":50051")
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "50051"
+	}
+	lis, err := net.Listen("tcp", ":"+grpcPort)
 	if err != nil {
 		log.Fatalf("listen: %v", err)
 	}
@@ -41,7 +45,7 @@ func main() {
 		s.GracefulStop()
 	}()
 
-	log.Println("gRPC server listening on :50051")
+	log.Printf("gRPC server listening on :%s", grpcPort)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("serve: %v", err)
 	}

@@ -78,7 +78,9 @@ func (s *Service) SearchManga(ctx context.Context, req *pb.SearchRequest) (*pb.S
 			log.Printf("grpc: SearchManga scan error: %v", err)
 			continue
 		}
-		json.Unmarshal([]byte(genresStr), &m.Genres) //nolint:errcheck
+		if err := json.Unmarshal([]byte(genresStr), &m.Genres); err != nil {
+			log.Printf("grpc: SearchManga: failed to parse genres for %q: %v", m.Id, err)
+		}
 		if req.Genre != "" {
 			match := false
 			for _, g := range m.Genres {

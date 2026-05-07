@@ -24,7 +24,11 @@ func main() {
 		grpcAddr = "localhost:50051"
 	}
 
-	db, err := database.Connect("./data/mangahub.db")
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./data/mangahub.db"
+	}
+	db, err := database.Connect(dbPath)
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}
