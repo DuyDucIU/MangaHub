@@ -69,14 +69,6 @@ func createTables(db *sql.DB) error {
 }
 
 func SeedManga(db *sql.DB, dataPath string) error {
-	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM manga").Scan(&count); err != nil {
-		return fmt.Errorf("count manga: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
 	data, err := os.ReadFile(dataPath)
 	if err != nil {
 		return fmt.Errorf("read seed file: %w", err)
