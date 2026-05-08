@@ -26,9 +26,9 @@ func (s *Service) GetManga(ctx context.Context, req *pb.GetMangaRequest) (*pb.Ma
 	var m pb.MangaResponse
 	var genresStr string
 	err := s.DB.QueryRowContext(ctx,
-		"SELECT id, title, author, genres, status, total_chapters, description FROM manga WHERE id = ?",
+		"SELECT id, title, author, genres, status, total_chapters, description, cover_url FROM manga WHERE id = ?",
 		req.Id,
-	).Scan(&m.Id, &m.Title, &m.Author, &genresStr, &m.Status, &m.TotalChapters, &m.Description)
+	).Scan(&m.Id, &m.Title, &m.Author, &genresStr, &m.Status, &m.TotalChapters, &m.Description, &m.CoverUrl)
 	if err == sql.ErrNoRows {
 		return nil, grpcstatus.Errorf(grpccodes.NotFound, "manga %q not found", req.Id)
 	}
@@ -52,7 +52,7 @@ func (s *Service) SearchManga(ctx context.Context, req *pb.SearchRequest) (*pb.S
 		pageSize = maxPageSize
 	}
 
-	query := "SELECT id, title, author, genres, status, total_chapters, description FROM manga WHERE 1=1"
+	query := "SELECT id, title, author, genres, status, total_chapters, description, cover_url FROM manga WHERE 1=1"
 	args := []interface{}{}
 	if req.Q != "" {
 		query += " AND (LOWER(title) LIKE LOWER(?) OR LOWER(author) LIKE LOWER(?))"
@@ -74,7 +74,7 @@ func (s *Service) SearchManga(ctx context.Context, req *pb.SearchRequest) (*pb.S
 	for rows.Next() {
 		var m pb.MangaResponse
 		var genresStr string
-		if err := rows.Scan(&m.Id, &m.Title, &m.Author, &genresStr, &m.Status, &m.TotalChapters, &m.Description); err != nil {
+		if err := rows.Scan(&m.Id, &m.Title, &m.Author, &genresStr, &m.Status, &m.TotalChapters, &m.Description, &m.CoverUrl); err != nil {
 			log.Printf("grpc: SearchManga scan error: %v", err)
 			continue
 		}

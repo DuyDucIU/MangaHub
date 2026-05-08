@@ -218,6 +218,7 @@ type MangaResponse struct {
 	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
 	TotalChapters int32                  `protobuf:"varint,6,opt,name=total_chapters,json=totalChapters,proto3" json:"total_chapters,omitempty"`
 	Description   string                 `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"`
+	CoverUrl      string                 `protobuf:"bytes,8,opt,name=cover_url,json=coverUrl,proto3" json:"cover_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -297,6 +298,13 @@ func (x *MangaResponse) GetTotalChapters() int32 {
 func (x *MangaResponse) GetDescription() string {
 	if x != nil {
 		return x.Description
+	}
+	return ""
+}
+
+func (x *MangaResponse) GetCoverUrl() string {
+	if x != nil {
+		return x.CoverUrl
 	}
 	return ""
 }
@@ -438,7 +446,7 @@ const file_proto_manga_manga_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x19\n" +
 	"\bmanga_id\x18\x02 \x01(\tR\amangaId\x12'\n" +
 	"\x0fcurrent_chapter\x18\x03 \x01(\x05R\x0ecurrentChapter\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\tR\x06status\"\xc6\x01\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\"\xe3\x01\n" +
 	"\rMangaResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x16\n" +
@@ -446,7 +454,8 @@ const file_proto_manga_manga_proto_rawDesc = "" +
 	"\x06genres\x18\x04 \x03(\tR\x06genres\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12%\n" +
 	"\x0etotal_chapters\x18\x06 \x01(\x05R\rtotalChapters\x12 \n" +
-	"\vdescription\x18\a \x01(\tR\vdescription\"l\n" +
+	"\vdescription\x18\a \x01(\tR\vdescription\x12\x1b\n" +
+	"\tcover_url\x18\b \x01(\tR\bcoverUrl\"l\n" +
 	"\x0eSearchResponse\x12.\n" +
 	"\aresults\x18\x01 \x03(\v2\x14.manga.MangaResponseR\aresults\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x05R\x05count\x12\x14\n" +

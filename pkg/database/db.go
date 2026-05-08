@@ -28,6 +28,8 @@ func Connect(path string) (*sql.DB, error) {
 	if err := createTables(db); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
 	}
+	// Migrate existing databases that predate the cover_url column.
+	db.Exec(`ALTER TABLE manga ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`) //nolint:errcheck
 	return db, nil
 }
 
@@ -48,7 +50,8 @@ func createTables(db *sql.DB) error {
 			genres         TEXT NOT NULL,
 			status         TEXT NOT NULL,
 			total_chapters INTEGER NOT NULL,
-			description    TEXT
+			description    TEXT,
+			cover_url      TEXT NOT NULL DEFAULT ''
 		);
 
 		CREATE TABLE IF NOT EXISTS user_progress (
@@ -66,14 +69,6 @@ func createTables(db *sql.DB) error {
 }
 
 func SeedManga(db *sql.DB, dataPath string) error {
-	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM manga").Scan(&count); err != nil {
-		return fmt.Errorf("count manga: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
 	data, err := os.ReadFile(dataPath)
 	if err != nil {
 		return fmt.Errorf("read seed file: %w", err)
@@ -87,9 +82,17 @@ func SeedManga(db *sql.DB, dataPath string) error {
 	for _, m := range mangaList {
 		genres, _ := json.Marshal(m.Genres)
 		_, err := db.Exec(
-			`INSERT OR IGNORE INTO manga (id, title, author, genres, status, total_chapters, description)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			m.ID, m.Title, m.Author, string(genres), m.Status, m.TotalChapters, m.Description,
+			`INSERT INTO manga (id, title, author, genres, status, total_chapters, description, cover_url)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(id) DO UPDATE SET
+			   title          = excluded.title,
+			   author         = excluded.author,
+			   genres         = excluded.genres,
+			   status         = excluded.status,
+			   total_chapters = excluded.total_chapters,
+			   description    = excluded.description,
+			   cover_url      = excluded.cover_url`,
+			m.ID, m.Title, m.Author, string(genres), m.Status, m.TotalChapters, m.Description, m.CoverURL,
 		)
 		if err != nil {
 			return fmt.Errorf("insert manga %q: %w", m.ID, err)
