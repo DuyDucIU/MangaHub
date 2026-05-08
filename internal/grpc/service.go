@@ -1,25 +1,27 @@
 package grpc
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"log"
-	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	grpccodes "google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
+	"mangahub/internal/tcp"
 	pb "mangahub/proto/manga"
 )
 
 // Service implements pb.MangaServiceServer.
+// TCPBroadcast is optional: when set, progress updates are pushed directly onto
+// the TCP server's buffered channel instead of going through the internal HTTP sidecar.
+// If nil (e.g. standalone grpc-server binary), broadcasts are skipped silently.
 type Service struct {
 	pb.UnimplementedMangaServiceServer
-	DB *sql.DB
+	DB           *sql.DB
+	TCPBroadcast chan tcp.ProgressUpdate
 }
 
 func (s *Service) GetManga(ctx context.Context, req *pb.GetMangaRequest) (*pb.MangaResponse, error) {
@@ -151,28 +153,27 @@ func (s *Service) UpdateProgress(ctx context.Context, req *pb.ProgressRequest) (
 		return nil, grpcstatus.Errorf(grpccodes.Internal, "db: %v", err)
 	}
 
-	go notifyTCPServer(req.UserId, req.MangaId, req.CurrentChapter)
+	s.pushTCPBroadcast(req.UserId, req.MangaId, req.CurrentChapter)
 
 	return &pb.ProgressResponse{MangaId: req.MangaId, CurrentChapter: req.CurrentChapter, Status: newStatus}, nil
 }
 
-var tcpClient = &http.Client{Timeout: time.Second}
-
-func notifyTCPServer(userID, mangaID string, chapter int32) {
-	addr := os.Getenv("TCP_INTERNAL_URL")
-	if addr == "" {
-		addr = "http://localhost:9099"
-	}
-	payload, _ := json.Marshal(struct {
-		UserID    string `json:"user_id"`
-		MangaID   string `json:"manga_id"`
-		Chapter   int32  `json:"chapter"`
-		Timestamp int64  `json:"timestamp"`
-	}{UserID: userID, MangaID: mangaID, Chapter: chapter, Timestamp: time.Now().Unix()})
-	resp, err := tcpClient.Post(addr+"/internal/broadcast", "application/json", bytes.NewReader(payload))
-	if err != nil {
-		log.Printf("grpc: TCP notify failed: %v", err)
+// pushTCPBroadcast enqueues a progress update onto the TCP server's buffered channel.
+// Non-blocking: logs and drops if the channel is full rather than stalling the gRPC call.
+// No-op when TCPBroadcast is nil (standalone grpc-server binary).
+func (s *Service) pushTCPBroadcast(userID, mangaID string, chapter int32) {
+	if s.TCPBroadcast == nil {
 		return
 	}
-	defer resp.Body.Close()
+	update := tcp.ProgressUpdate{
+		UserID:    userID,
+		MangaID:   mangaID,
+		Chapter:   int(chapter),
+		Timestamp: time.Now().Unix(),
+	}
+	select {
+	case s.TCPBroadcast <- update:
+	default:
+		log.Printf("grpc: TCP broadcast queue full, dropping update for user %s manga %s", userID, mangaID)
+	}
 }

@@ -209,12 +209,8 @@ func extractGenres(tags []tag) []string {
 }
 
 func normalizeStatus(s string) string {
-	switch strings.ToLower(s) {
-	case "completed":
+	if strings.ToLower(s) == "completed" {
 		return "completed"
-	case "hiatus":
-		return "hiatus"
-	default:
-		return "ongoing"
 	}
+	return "ongoing"
 }

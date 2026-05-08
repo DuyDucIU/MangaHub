@@ -53,20 +53,6 @@ func main() {
 		log.Printf("seed warning: %v", err)
 	}
 
-	// --- gRPC server ---
-	grpcLis, err := net.Listen("tcp", ":"+grpcPort)
-	if err != nil {
-		log.Fatalf("[gRPC] listen: %v", err)
-	}
-	grpcSrv := grpclib.NewServer()
-	pb.RegisterMangaServiceServer(grpcSrv, &mangagrpc.Service{DB: db})
-	go func() {
-		log.Printf("[gRPC] listening on :%s", grpcPort)
-		if err := grpcSrv.Serve(grpcLis); err != nil {
-			log.Printf("[gRPC] stopped: %v", err)
-		}
-	}()
-
 	// --- TCP server ---
 	tcpSrv := tcp.New(tcpPort)
 	tcpHTTP := &http.Server{Addr: tcpInternal, Handler: tcpSrv.InternalHandler()}
@@ -79,6 +65,20 @@ func main() {
 	go func() {
 		log.Printf("[TCP ] listening on :%s", tcpPort)
 		tcpSrv.Run()
+	}()
+
+	// --- gRPC server ---
+	grpcLis, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		log.Fatalf("[gRPC] listen: %v", err)
+	}
+	grpcSrv := grpclib.NewServer()
+	pb.RegisterMangaServiceServer(grpcSrv, &mangagrpc.Service{DB: db, TCPBroadcast: tcpSrv.Broadcast})
+	go func() {
+		log.Printf("[gRPC] listening on :%s", grpcPort)
+		if err := grpcSrv.Serve(grpcLis); err != nil {
+			log.Printf("[gRPC] stopped: %v", err)
+		}
 	}()
 
 	// --- UDP server ---

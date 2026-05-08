@@ -27,11 +27,12 @@ var AllowedGenres = map[string]bool{
 	"Supernatural": true, "Thriller": true, "Historical": true, "Music": true,
 	"School": true, "Magic": true, "Fashion": true,
 	"Shounen": true, "Shoujo": true, "Seinen": true, "Josei": true,
+	"Dark Fantasy": true, "Autobiography": true,
 }
 
 // AllowedStatuses defines the accepted manga publication statuses.
 var AllowedStatuses = map[string]bool{
-	"ongoing": true, "completed": true, "hiatus": true,
+	"ongoing": true, "completed": true,
 }
 
 type Handler struct {
