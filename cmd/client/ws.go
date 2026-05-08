@@ -24,7 +24,8 @@ func (a *App) enterChatRoom() {
 
 	wsURL := strings.Replace(a.BaseURL, "http://", "ws://", 1) + "/ws/chat?manga_id=" + mangaID
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+	conn, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		fmt.Println("Error connecting to chat:", err)
 		return
@@ -85,7 +86,7 @@ func (a *App) enterChatRoom() {
 		}
 	}
 
-	conn.WriteMessage(websocket.CloseMessage,
+	conn.WriteMessage(websocket.CloseMessage, //nolint:errcheck
 		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	select {
 	case <-done:

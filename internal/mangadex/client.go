@@ -213,7 +213,7 @@ func normalizeStatus(s string) string {
 	case "completed":
 		return "completed"
 	case "hiatus":
-		return "ongoing"
+		return "hiatus"
 	default:
 		return "ongoing"
 	}

@@ -35,6 +35,7 @@ func getenv(key, fallback string) string {
 func main() {
 	jwtSecret := getenv("JWT_SECRET", "mangahub-dev-secret")
 	dbPath := getenv("DB_PATH", "./data/mangahub.db")
+	httpPort := getenv("HTTP_PORT", "8080")
 	grpcAddr := getenv("GRPC_ADDR", "localhost:50051")
 	grpcPort := getenv("GRPC_PORT", "50051")
 	tcpPort := getenv("TCP_PORT", "9090")
@@ -124,9 +125,9 @@ func main() {
 	protected.DELETE("/users/library/:manga_id", userHandler.RemoveFromLibrary)
 	protected.PUT("/users/progress", userHandler.UpdateProgress)
 
-	httpSrv := &http.Server{Addr: ":8080", Handler: r}
+	httpSrv := &http.Server{Addr: ":" + httpPort, Handler: r}
 	go func() {
-		log.Printf("[HTTP] API + WebSocket listening on :8080")
+		log.Printf("[HTTP] API + WebSocket listening on :%s", httpPort)
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("[HTTP] stopped: %v", err)
 		}

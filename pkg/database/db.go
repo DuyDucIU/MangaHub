@@ -82,8 +82,16 @@ func SeedManga(db *sql.DB, dataPath string) error {
 	for _, m := range mangaList {
 		genres, _ := json.Marshal(m.Genres)
 		_, err := db.Exec(
-			`INSERT OR IGNORE INTO manga (id, title, author, genres, status, total_chapters, description, cover_url)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO manga (id, title, author, genres, status, total_chapters, description, cover_url)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(id) DO UPDATE SET
+			   title          = excluded.title,
+			   author         = excluded.author,
+			   genres         = excluded.genres,
+			   status         = excluded.status,
+			   total_chapters = excluded.total_chapters,
+			   description    = excluded.description,
+			   cover_url      = excluded.cover_url`,
 			m.ID, m.Title, m.Author, string(genres), m.Status, m.TotalChapters, m.Description, m.CoverURL,
 		)
 		if err != nil {
