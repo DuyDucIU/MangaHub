@@ -3,7 +3,29 @@ package udp
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
+
+// AdminNotify is a Gin handler for POST /admin/notify.
+// Requires manga_id and message in the JSON body; pushes to the Notify channel non-blocking.
+func (s *NotificationServer) AdminNotify(c *gin.Context) {
+	var req NotifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.MangaID == "" || req.Message == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "manga_id and message are required"})
+		return
+	}
+	select {
+	case s.Notify <- req:
+		c.JSON(http.StatusOK, gin.H{"message": "notification queued", "manga_id": req.MangaID})
+	default:
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "notification queue full"})
+	}
+}
 
 // InternalHandler returns an HTTP handler for the internal notify endpoint.
 // Only POST /internal/notify is accepted.

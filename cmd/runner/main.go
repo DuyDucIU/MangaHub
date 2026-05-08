@@ -124,6 +124,7 @@ func main() {
 	protected.GET("/users/library", userHandler.GetLibrary)
 	protected.DELETE("/users/library/:manga_id", userHandler.RemoveFromLibrary)
 	protected.PUT("/users/progress", userHandler.UpdateProgress)
+	protected.POST("/admin/notify", udpSrv.AdminNotify)
 
 	httpSrv := &http.Server{Addr: ":" + httpPort, Handler: r}
 	go func() {
