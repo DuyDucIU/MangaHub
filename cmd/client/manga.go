@@ -127,39 +127,46 @@ func (a *App) doViewDetails(id string) bool {
 		fmt.Printf("\n%s\n", m.Description)
 	}
 
-	if a.Token != "" {
-		entry := a.findInLibrary(id)
-		if entry != nil {
-			fmt.Printf("\n[In your library] Chapter: %d | Status: %s\n", entry.CurrentChapter, entry.Status)
-			fmt.Println("\n1. Update progress")
-			fmt.Println("2. Back to results")
-			fmt.Println("0. Main menu")
-			switch a.prompt("> ") {
-			case "1":
-				a.doUpdateProgressFor(entry)
-			case "0":
-				return false
+	for {
+		if a.Token != "" {
+			entry := a.findInLibrary(id)
+			if entry != nil {
+				fmt.Printf("\n[In your library] Chapter: %d | Status: %s\n", entry.CurrentChapter, entry.Status)
+				fmt.Println("\n1. Update progress")
+				fmt.Println("2. Back to results")
+				fmt.Println("0. Main menu")
+				switch a.prompt("> ") {
+				case "1":
+					a.doUpdateProgressFor(entry)
+				case "2":
+					return true
+				case "0":
+					return false
+				}
+			} else {
+				fmt.Println("\n1. Add to library")
+				fmt.Println("2. Back to results")
+				fmt.Println("0. Main menu")
+				switch a.prompt("> ") {
+				case "1":
+					a.doAddToLibraryFor(id)
+				case "2":
+					return true
+				case "0":
+					return false
+				}
 			}
 		} else {
-			fmt.Println("\n1. Add to library")
-			fmt.Println("2. Back to results")
+			fmt.Println("\n1. Back to results")
 			fmt.Println("0. Main menu")
 			switch a.prompt("> ") {
 			case "1":
-				a.doAddToLibraryFor(id)
+				return true
 			case "0":
 				return false
 			}
 		}
-	} else {
-		fmt.Println("\n1. Back to results")
-		fmt.Println("0. Main menu")
-		if a.prompt("> ") == "0" {
-			return false
-		}
 	}
-
-	return true
 }
 
 // findInLibrary returns the user's library entry for mangaID, or nil if not present.
@@ -193,6 +200,14 @@ func (a *App) doAddToLibraryFor(mangaID string) {
 		} else {
 			fmt.Println("Invalid chapter number, defaulting to 0.")
 		}
+	}
+
+	fmt.Printf("\nConfirm: add %q to library as %q at chapter %d?\n", mangaID, status, chapter)
+	fmt.Println("1. Confirm")
+	fmt.Println("0. Cancel")
+	if a.prompt("> ") != "1" {
+		fmt.Println("Cancelled.")
+		return
 	}
 
 	var resp apiError
@@ -284,6 +299,10 @@ func (a *App) doLibrary() {
 func (a *App) doAddToLibrary() {
 	fmt.Println("\n--- Add to Library ---")
 	mangaID := a.prompt("Manga ID: ")
+	if mangaID == "" {
+		fmt.Println(" - Manga ID is required.")
+		return
+	}
 	status := a.prompt("Status (reading / completed / plan_to_read / on_hold / dropped) [default: reading]: ")
 	if status == "" {
 		status = "reading"
@@ -319,6 +338,10 @@ func (a *App) doAddToLibrary() {
 func (a *App) doUpdateProgress() {
 	fmt.Println("\n--- Update Progress ---")
 	mangaID := a.prompt("Manga ID: ")
+	if mangaID == "" {
+		fmt.Println(" - Manga ID is required.")
+		return
+	}
 	chStr := a.prompt("Current chapter: ")
 	chapter := 0
 	if n, err := strconv.Atoi(chStr); err == nil {

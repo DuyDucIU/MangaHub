@@ -4,11 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"mangahub/pkg/models"
+	"mangahub/pkg/utils"
 )
 
 // ProgressGRPCClient is satisfied by *grpc.Client from internal/grpc.
@@ -54,7 +57,7 @@ func (h *Handler) AddToLibrary(c *gin.Context) {
 
 	var req addToLibraryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": utils.BindingError(err)})
 		return
 	}
 
@@ -63,13 +66,23 @@ func (h *Handler) AddToLibrary(c *gin.Context) {
 		return
 	}
 
-	var exists int
-	if err := h.DB.QueryRow("SELECT COUNT(*) FROM manga WHERE id = ?", req.MangaID).Scan(&exists); err != nil || exists == 0 {
+	var totalChapters int
+	err := h.DB.QueryRow("SELECT total_chapters FROM manga WHERE id = ?", req.MangaID).Scan(&totalChapters)
+	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "manga not found"})
 		return
 	}
+	if err != nil {
+		log.Printf("user: AddToLibrary db error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
+	if totalChapters > 0 && req.CurrentChapter > totalChapters {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("chapter %d exceeds total (%d)", req.CurrentChapter, totalChapters)})
+		return
+	}
 
-	_, err := h.DB.Exec(
+	_, err = h.DB.Exec(
 		`INSERT INTO user_progress (user_id, manga_id, current_chapter, status) VALUES (?, ?, ?, ?)`,
 		userID, req.MangaID, req.CurrentChapter, req.Status,
 	)
@@ -152,7 +165,7 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 
 	var req updateProgressRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": utils.BindingError(err)})
 		return
 	}
 
@@ -167,7 +180,8 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, models.ErrInvalidArgument) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		msg := strings.TrimPrefix(err.Error(), string(models.ErrInvalidArgument.Error())+": ")
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
 	if err != nil {
