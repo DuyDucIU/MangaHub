@@ -96,20 +96,23 @@ func (a *App) doSearch() {
 			fmt.Println("Invalid selection.")
 			continue
 		}
-		a.doViewDetails(resp.Results[idx-1].ID)
+		if !a.doViewDetails(resp.Results[idx-1].ID) {
+			return
+		}
 	}
 }
 
-func (a *App) doViewDetails(id string) {
+// doViewDetails displays manga details and returns true to go back to results, false to go to main menu.
+func (a *App) doViewDetails(id string) bool {
 	var m mangaItem
 	code, err := getJSON(a.BaseURL+"/manga/"+id, a.Token, &m)
 	if err != nil {
 		fmt.Println("Error:", err)
-		return
+		return true
 	}
 	if code != 200 {
 		fmt.Println("Manga not found.")
-		return
+		return true
 	}
 	fmt.Printf("\n=== %s ===\n", m.Title)
 	fmt.Printf("ID:       %s\n", m.ID)
@@ -124,25 +127,39 @@ func (a *App) doViewDetails(id string) {
 		fmt.Printf("\n%s\n", m.Description)
 	}
 
-	if a.Token == "" {
-		return
-	}
-
-	entry := a.findInLibrary(id)
-	if entry != nil {
-		fmt.Printf("\n[In your library] Chapter: %d | Status: %s\n", entry.CurrentChapter, entry.Status)
-		fmt.Println("\n1. Update progress")
-		fmt.Println("0. Back")
-		if a.prompt("> ") == "1" {
-			a.doUpdateProgressFor(entry)
+	if a.Token != "" {
+		entry := a.findInLibrary(id)
+		if entry != nil {
+			fmt.Printf("\n[In your library] Chapter: %d | Status: %s\n", entry.CurrentChapter, entry.Status)
+			fmt.Println("\n1. Update progress")
+			fmt.Println("2. Back to results")
+			fmt.Println("0. Main menu")
+			switch a.prompt("> ") {
+			case "1":
+				a.doUpdateProgressFor(entry)
+			case "0":
+				return false
+			}
+		} else {
+			fmt.Println("\n1. Add to library")
+			fmt.Println("2. Back to results")
+			fmt.Println("0. Main menu")
+			switch a.prompt("> ") {
+			case "1":
+				a.doAddToLibraryFor(id)
+			case "0":
+				return false
+			}
 		}
 	} else {
-		fmt.Println("\n1. Add to library")
-		fmt.Println("0. Back")
-		if a.prompt("> ") == "1" {
-			a.doAddToLibraryFor(id)
+		fmt.Println("\n1. Back to results")
+		fmt.Println("0. Main menu")
+		if a.prompt("> ") == "0" {
+			return false
 		}
 	}
+
+	return true
 }
 
 // findInLibrary returns the user's library entry for mangaID, or nil if not present.
