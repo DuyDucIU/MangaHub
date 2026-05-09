@@ -80,22 +80,24 @@ func (a *App) doSearch() {
 		return
 	}
 
-	fmt.Printf("\nFound %d result(s) (showing %d):\n\n", resp.Total, resp.Count)
-	for i, m := range resp.Results {
-		fmt.Printf("  %2d. %-35s  by %-20s  [%s]\n", i+1, m.Title, m.Author, m.ID)
-	}
+	for {
+		fmt.Printf("\nFound %d result(s) (showing %d):\n\n", resp.Total, resp.Count)
+		for i, m := range resp.Results {
+			fmt.Printf("  %2d. %-35s  by %-20s  [%s]\n", i+1, m.Title, m.Author, m.ID)
+		}
 
-	choice := a.prompt("\nEnter number to view details (Enter to go back): ")
-	if choice == "" {
-		return
+		choice := a.prompt("\nEnter number to view details (Enter to go back): ")
+		if choice == "" {
+			return
+		}
+		idx := 0
+		fmt.Sscanf(choice, "%d", &idx)
+		if idx < 1 || idx > len(resp.Results) {
+			fmt.Println("Invalid selection.")
+			continue
+		}
+		a.doViewDetails(resp.Results[idx-1].ID)
 	}
-	idx := 0
-	fmt.Sscanf(choice, "%d", &idx)
-	if idx < 1 || idx > len(resp.Results) {
-		fmt.Println("Invalid selection.")
-		return
-	}
-	a.doViewDetails(resp.Results[idx-1].ID)
 }
 
 func (a *App) doViewDetails(id string) {
@@ -162,9 +164,9 @@ func (a *App) findInLibrary(mangaID string) *libraryItem {
 
 // doAddToLibraryFor adds a specific manga to the library with the manga ID pre-filled.
 func (a *App) doAddToLibraryFor(mangaID string) {
-	status := a.prompt("Status (reading / completed / plan_to_read / on_hold / dropped): ")
+	status := a.prompt("Status (reading / completed / plan_to_read / on_hold / dropped) [default: reading]: ")
 	if status == "" {
-		return
+		status = "reading"
 	}
 	chStr := a.prompt("Current chapter (default 0): ")
 	chapter := 0
@@ -265,7 +267,10 @@ func (a *App) doLibrary() {
 func (a *App) doAddToLibrary() {
 	fmt.Println("\n--- Add to Library ---")
 	mangaID := a.prompt("Manga ID: ")
-	status := a.prompt("Status (reading / completed / plan_to_read / on_hold / dropped): ")
+	status := a.prompt("Status (reading / completed / plan_to_read / on_hold / dropped) [default: reading]: ")
+	if status == "" {
+		status = "reading"
+	}
 
 	chStr := a.prompt("Current chapter (default 0): ")
 	chapter := 0
