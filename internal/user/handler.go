@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -96,6 +97,7 @@ func (h *Handler) GetLibrary(c *gin.Context) {
 		ORDER BY up.updated_at DESC
 	`, userID)
 	if err != nil {
+		log.Printf("user: GetLibrary db error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
 	}
@@ -131,6 +133,7 @@ func (h *Handler) RemoveFromLibrary(c *gin.Context) {
 		userID, mangaID,
 	)
 	if err != nil {
+		log.Printf("user: RemoveFromLibrary db error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
 	}

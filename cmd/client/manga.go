@@ -47,7 +47,7 @@ func (a *App) doSearch() {
 	fmt.Println("\n--- Search Manga ---")
 	q := a.prompt("Title / author (Enter to skip): ")
 	genre := a.prompt("Genre (Enter to skip): ")
-	status := a.prompt("Status — ongoing/completed/hiatus (Enter to skip): ")
+	status := a.prompt("Status — ongoing/completed (Enter to skip): ")
 
 	params := url.Values{}
 	if q != "" {

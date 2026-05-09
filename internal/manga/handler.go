@@ -105,7 +105,7 @@ func (h *Handler) Create(c *gin.Context) {
 
 	if !AllowedStatuses[strings.ToLower(req.Status)] {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid status; must be one of: ongoing, completed, hiatus",
+			"error": "invalid status; must be one of: ongoing, completed",
 		})
 		return
 	}

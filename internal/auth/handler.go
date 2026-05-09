@@ -3,6 +3,7 @@ package auth
 import (
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -63,6 +64,7 @@ func (h *Handler) Register(c *gin.Context) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	if err != nil {
+		log.Printf("auth: bcrypt error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -98,6 +100,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	if err != nil {
+		log.Printf("auth: db query error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
