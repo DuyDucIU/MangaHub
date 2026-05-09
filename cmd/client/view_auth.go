@@ -5,7 +5,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func initLoginInputs() []textinput.Model    { return nil }
+func initLoginInputs() []textinput.Model {
+	return []textinput.Model{textinput.New(), textinput.New()}
+}
+
 func initRegisterInputs() []textinput.Model { return nil }
 
 func cmdLogin(baseURL, username, password string) tea.Cmd                    { return nil }

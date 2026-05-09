@@ -1,8 +1,16 @@
 package main
 
 import (
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+func newChatPromptInput() textinput.Model {
+	inp := textinput.New()
+	inp.Placeholder = "manga ID (blank = general)"
+	inp.Focus()
+	return inp
+}
 
 func formatChatMsg(msg chatMessage, myUserID string) string { return "" }
 
