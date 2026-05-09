@@ -63,6 +63,20 @@ func (a *App) doLogin() {
 	username := a.prompt("Username: ")
 	password := a.prompt("Password: ")
 
+	var errs []string
+	if username == "" {
+		errs = append(errs, "Username is required.")
+	}
+	if password == "" {
+		errs = append(errs, "Password is required.")
+	}
+	if len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Println(" -", e)
+		}
+		return
+	}
+
 	var resp loginResponse
 	status, err := postJSON(a.BaseURL+"/auth/login", "", map[string]string{
 		"username": username,
