@@ -2,11 +2,13 @@ package auth
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -28,10 +30,34 @@ type loginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+func bindingError(err error) string {
+	var ve validator.ValidationErrors
+	if !errors.As(err, &ve) {
+		return err.Error()
+	}
+	msgs := make([]string, 0, len(ve))
+	for _, fe := range ve {
+		field := strings.ToLower(fe.Field())
+		switch fe.Tag() {
+		case "required":
+			msgs = append(msgs, field+" is required")
+		case "min":
+			msgs = append(msgs, field+" must be at least "+fe.Param()+" characters")
+		case "max":
+			msgs = append(msgs, field+" must be at most "+fe.Param()+" characters")
+		case "email":
+			msgs = append(msgs, "email is invalid")
+		default:
+			msgs = append(msgs, field+" is invalid")
+		}
+	}
+	return strings.Join(msgs, "; ")
+}
+
 func (h *Handler) Register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": bindingError(err)})
 		return
 	}
 
@@ -58,7 +84,7 @@ func (h *Handler) Register(c *gin.Context) {
 func (h *Handler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": bindingError(err)})
 		return
 	}
 

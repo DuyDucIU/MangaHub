@@ -52,7 +52,10 @@ func (a *App) doRegister() {
 		return
 	}
 	if status != 201 {
-		fmt.Println("Registration failed:", resp.Error)
+		fmt.Println("Registration failed:")
+		for _, e := range strings.Split(resp.Error, "; ") {
+			fmt.Println(" -", e)
+		}
 		return
 	}
 	fmt.Println("Registered successfully! You can now log in.")
@@ -87,7 +90,10 @@ func (a *App) doLogin() {
 		return
 	}
 	if status != 200 {
-		fmt.Println("Login failed:", resp.Error)
+		fmt.Println("Login failed:")
+		for _, e := range strings.Split(resp.Error, "; ") {
+			fmt.Println(" -", e)
+		}
 		return
 	}
 
