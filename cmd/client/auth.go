@@ -24,6 +24,23 @@ func (a *App) doRegister() {
 	email := a.prompt("Email: ")
 	password := a.prompt("Password (min 8 chars): ")
 
+	var errs []string
+	if len(username) < 3 {
+		errs = append(errs, "Username must be at least 3 characters.")
+	}
+	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
+		errs = append(errs, "Email is invalid.")
+	}
+	if len(password) < 8 {
+		errs = append(errs, "Password must be at least 8 characters.")
+	}
+	if len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Println(" -", e)
+		}
+		return
+	}
+
 	var resp registerResponse
 	status, err := postJSON(a.BaseURL+"/auth/register", "", map[string]string{
 		"username": username,

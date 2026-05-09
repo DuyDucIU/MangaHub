@@ -30,6 +30,8 @@ func Connect(path string) (*sql.DB, error) {
 	}
 	// Migrate existing databases that predate the cover_url column.
 	db.Exec(`ALTER TABLE manga ADD COLUMN cover_url TEXT NOT NULL DEFAULT ''`) //nolint:errcheck
+	// Migrate existing databases that lack the unique index on users.email.
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)`) //nolint:errcheck
 	return db, nil
 }
 
