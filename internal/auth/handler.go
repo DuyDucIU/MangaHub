@@ -94,7 +94,7 @@ func (h *Handler) Login(c *gin.Context) {
 	).Scan(&userID, &username, &passwordHash)
 
 	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "account not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Account not found"})
 		return
 	}
 	if err != nil {
@@ -103,7 +103,7 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 

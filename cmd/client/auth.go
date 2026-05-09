@@ -94,6 +94,9 @@ func (a *App) doLogin() {
 		for _, e := range strings.Split(resp.Error, "; ") {
 			fmt.Println(" -", e)
 		}
+		if status == 404 {
+			fmt.Println("Tip: No account found. Use option 2 to register.")
+		}
 		return
 	}
 
