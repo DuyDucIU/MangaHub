@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -66,11 +65,11 @@ func cmdSendWSMessage(conn *websocket.Conn, text string) tea.Cmd {
 	return func() tea.Msg {
 		err := conn.WriteJSON(map[string]interface{}{
 			"message":   text,
-			"timestamp": fmt.Sprintf("%d", time.Now().Unix()),
+			"timestamp": time.Now().Unix(),
 		})
 		if err != nil {
 			return errMsg{text: "Send failed: " + err.Error()}
 		}
-		return nil
+		return waitForWS(conn)
 	}
 }

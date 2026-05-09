@@ -242,7 +242,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tcpNotifMsg:
-		m.notification = msg.text
+		if msg.text != "" {
+			m.notification = msg.text
+		}
 		if m.tcpConn != nil {
 			return m, waitForTCP(m.tcpConn)
 		}
@@ -318,7 +320,7 @@ func renderHeader(m Model) string {
 	if m.username != "" {
 		right = m.username + "  "
 	}
-	gap := m.width - len(left) - len(right)
+	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 0 {
 		gap = 0
 	}
