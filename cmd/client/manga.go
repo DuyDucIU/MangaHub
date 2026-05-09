@@ -121,6 +121,116 @@ func (a *App) doViewDetails(id string) {
 	if m.Description != "" {
 		fmt.Printf("\n%s\n", m.Description)
 	}
+
+	if a.Token == "" {
+		return
+	}
+
+	entry := a.findInLibrary(id)
+	if entry != nil {
+		fmt.Printf("\n[In your library] Chapter: %d | Status: %s\n", entry.CurrentChapter, entry.Status)
+		fmt.Println("\n1. Update progress")
+		fmt.Println("0. Back")
+		if a.prompt("> ") == "1" {
+			a.doUpdateProgressFor(entry)
+		}
+	} else {
+		fmt.Println("\n1. Add to library")
+		fmt.Println("0. Back")
+		if a.prompt("> ") == "1" {
+			a.doAddToLibraryFor(id)
+		}
+	}
+}
+
+// findInLibrary returns the user's library entry for mangaID, or nil if not present.
+func (a *App) findInLibrary(mangaID string) *libraryItem {
+	var resp libraryResponse
+	code, err := getJSON(a.BaseURL+"/users/library", a.Token, &resp)
+	if err != nil || code != 200 {
+		return nil
+	}
+	for _, items := range resp.ReadingLists {
+		for i := range items {
+			if items[i].MangaID == mangaID {
+				return &items[i]
+			}
+		}
+	}
+	return nil
+}
+
+// doAddToLibraryFor adds a specific manga to the library with the manga ID pre-filled.
+func (a *App) doAddToLibraryFor(mangaID string) {
+	status := a.prompt("Status (reading / completed / plan_to_read / on_hold / dropped): ")
+	if status == "" {
+		return
+	}
+	chStr := a.prompt("Current chapter (default 0): ")
+	chapter := 0
+	if chStr != "" {
+		if n, err := strconv.Atoi(chStr); err == nil {
+			chapter = n
+		} else {
+			fmt.Println("Invalid chapter number, defaulting to 0.")
+		}
+	}
+
+	var resp apiError
+	code, err := postJSON(a.BaseURL+"/users/library", a.Token, map[string]interface{}{
+		"manga_id":        mangaID,
+		"status":          status,
+		"current_chapter": chapter,
+	}, &resp)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	if code != 201 {
+		fmt.Println("Failed:", resp.Error)
+		return
+	}
+	fmt.Printf("Added to library with status %q at chapter %d.\n", status, chapter)
+}
+
+// doUpdateProgressFor updates progress for a specific library entry with the manga ID pre-filled.
+func (a *App) doUpdateProgressFor(entry *libraryItem) {
+	fmt.Printf("Current: chapter %d | status: %s\n", entry.CurrentChapter, entry.Status)
+	chStr := a.prompt(fmt.Sprintf("New chapter (Enter to keep %d): ", entry.CurrentChapter))
+	chapter := entry.CurrentChapter
+	if chStr != "" {
+		if n, err := strconv.Atoi(chStr); err == nil {
+			chapter = n
+		} else {
+			fmt.Println("Invalid chapter number, keeping current.")
+		}
+	}
+	status := a.prompt(fmt.Sprintf("New status (Enter to keep %q): ", entry.Status))
+
+	body := map[string]interface{}{
+		"manga_id":        entry.MangaID,
+		"current_chapter": chapter,
+	}
+	if status != "" {
+		body["status"] = status
+	}
+
+	var resp apiError
+	code, err := putJSON(a.BaseURL+"/users/progress", a.Token, body, &resp)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	if code != 200 {
+		fmt.Println("Failed:", resp.Error)
+		return
+	}
+	fmt.Printf("Progress updated: chapter %d | status: %s\n", chapter, func() string {
+		if status != "" {
+			return status
+		}
+		return entry.Status
+	}())
 }
 
 func (a *App) doLibrary() {
