@@ -120,51 +120,34 @@ type errMsg            struct{ text string }
 // --- Lipgloss styles ---
 
 var (
-	colorGold    = lipgloss.Color("#C9A84C")
-	colorCrimson = lipgloss.Color("#8B1A1A")
-	colorText    = lipgloss.Color("#D4CFBF")
-	colorMuted   = lipgloss.Color("#4A5568")
-	colorNotif   = lipgloss.Color("#A07800")
-
 	styleHeader = lipgloss.NewStyle().
-			Background(colorGold).
-			Foreground(lipgloss.Color("#0F0F14")).
 			Bold(true).
 			Padding(0, 1)
 
 	styleSidebarItem = lipgloss.NewStyle().
-				Foreground(colorText).
 				Padding(0, 1)
 
 	styleSidebarSelected = lipgloss.NewStyle().
-				Background(colorCrimson).
-				Foreground(colorGold).
 				Bold(true).
 				Padding(0, 1)
 
 	styleTitle = lipgloss.NewStyle().
-			Foreground(colorGold).
 			Bold(true)
 
-	styleMutedText = lipgloss.NewStyle().
-			Foreground(colorMuted)
+	styleMutedText = lipgloss.NewStyle()
 
-	styleNotif = lipgloss.NewStyle().
-			Foreground(colorNotif)
+	styleNotif = lipgloss.NewStyle()
 
-	styleNormal = lipgloss.NewStyle().
-			Foreground(colorText)
+	styleNormal = lipgloss.NewStyle()
 
 	styleBorderBox = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(colorMuted)
+			Border(lipgloss.NormalBorder())
 
 	styleActiveBorderBox = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(colorGold)
+				Border(lipgloss.NormalBorder())
 
 	styleError = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF6B6B"))
+			Bold(true)
 )
 
 const sidebarWidth = 22
@@ -275,8 +258,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		// Global keys — intercept before modal and view routing
-		if m.activeModal == modalNone {
+		// Global keys — intercept before modal and view routing.
+		// Skip when a text input in the current view has focus.
+		textInputActive := m.searchInputFocused ||
+			m.currentView == viewLogin || m.currentView == viewRegister ||
+			m.currentView == viewChat
+		if m.activeModal == modalNone && !textInputActive {
 			switch msg.String() {
 			case "q":
 				closeConns(m)
@@ -407,7 +394,6 @@ func renderLayout(m Model) string {
 		Height(bodyHeight).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colorMuted).
 		Render(renderContent(m, contentWidth-2, bodyHeight-1))
 	footer := renderFooter(m)
 

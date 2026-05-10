@@ -72,7 +72,6 @@ func renderLibrary(m Model, width, height int) string {
 		Width(1).Height(height).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colorMuted).
 		Render("")
 	right := lipgloss.NewStyle().Width(rightWidth).Height(height).Render(
 		renderLibraryRight(m, rightWidth, height),
@@ -102,11 +101,10 @@ func renderLibraryLeft(m Model, width, height int) string {
 		sb.WriteString("\n  " + styleMutedText.Render(
 			fmt.Sprintf("%s (%d)", label, len(items))) + "\n")
 		for _, item := range items {
-			line := "  " + truncate(item.Title, width-4)
 			if flatIdx == m.libraryCursor {
-				sb.WriteString(styleSidebarSelected.Width(width).Render(line) + "\n")
+				sb.WriteString(styleSidebarSelected.Width(width).Render("> " + truncate(item.Title, width-4)) + "\n")
 			} else {
-				sb.WriteString(styleNormal.Render(line) + "\n")
+				sb.WriteString(styleNormal.Render("  " + truncate(item.Title, width-4)) + "\n")
 			}
 			flatIdx++
 		}

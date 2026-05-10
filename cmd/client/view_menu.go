@@ -82,11 +82,10 @@ func renderSidebar(m Model, width, height int) string {
 	items := sidebarItems(m)
 	var sb strings.Builder
 	for i, item := range items {
-		label := "  " + item
 		if i == m.sidebarIdx {
-			sb.WriteString(styleSidebarSelected.Width(width).Render(label) + "\n")
+			sb.WriteString(styleSidebarSelected.Width(width).Render("> " + item) + "\n")
 		} else {
-			sb.WriteString(styleSidebarItem.Width(width).Render(label) + "\n")
+			sb.WriteString(styleSidebarItem.Width(width).Render("  " + item) + "\n")
 		}
 	}
 	// pad to fill height

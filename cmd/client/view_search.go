@@ -321,7 +321,6 @@ func renderSearch(m Model, width, height int) string {
 		Width(1).Height(height).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colorMuted).
 		Render("")
 	right := lipgloss.NewStyle().Width(rightWidth).Height(height).Render(
 		renderSearchRight(m, rightWidth, height),
@@ -352,11 +351,10 @@ func renderSearchLeft(m Model, width, height int) string {
 		"  %d result(s) — %d/%d", m.searchTotal, m.searchPage, pages)) + "\n")
 
 	for i, item := range m.searchResults {
-		line := "  " + truncate(item.Title, width-4)
 		if i == m.searchCursor {
-			sb.WriteString(styleSidebarSelected.Width(width).Render(line) + "\n")
+			sb.WriteString(styleSidebarSelected.Width(width).Render("> " + truncate(item.Title, width-4)) + "\n")
 		} else {
-			sb.WriteString(styleNormal.Render(line) + "\n")
+			sb.WriteString(styleNormal.Render("  " + truncate(item.Title, width-4)) + "\n")
 		}
 	}
 	sb.WriteString("\n" + styleMutedText.Render("  ↑↓ navigate  ←→ page  / search  a add") + "\n")
