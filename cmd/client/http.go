@@ -52,6 +52,25 @@ func getJSON(url, token string, dest interface{}) (int, error) {
 	return resp.StatusCode, nil
 }
 
+// deleteJSON sends a DELETE request to url with optional Bearer token,
+// decodes the response into dest, and returns the HTTP status code.
+func deleteJSON(url, token string, dest interface{}) (int, error) {
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	json.NewDecoder(resp.Body).Decode(dest) //nolint:errcheck
+	return resp.StatusCode, nil
+}
+
 // putJSON marshals body as JSON, PUTs to url with optional Bearer token,
 // and decodes the response into dest.
 func putJSON(url, token string, body interface{}, dest interface{}) (int, error) {

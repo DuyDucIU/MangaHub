@@ -5,55 +5,60 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type tcpServerMsg struct {
-	Type    string `json:"type"`
-	MangaID string `json:"manga_id"`
-	Chapter int    `json:"chapter"`
-	Message string `json:"message"`
+	Type       string `json:"type"`
+	MangaID    string `json:"manga_id"`
+	MangaTitle string `json:"manga_title"`
+	Chapter    int    `json:"chapter"`
+	Message    string `json:"message"`
 }
 
-func (a *App) connectTCP() {
-	addr := getenv("TCP_ADDR", "localhost:9090")
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		fmt.Println("Warning: could not connect to TCP server:", err)
-		fmt.Println("Real-time progress updates will not be received.")
-		return
+// cmdConnectTCP dials the TCP server, sends the auth message, and returns
+// tcpConnectedMsg on success or tcpNotifMsg with a warning on failure.
+func cmdConnectTCP(addr, token string) tea.Cmd {
+	return func() tea.Msg {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return tcpNotifMsg{text: "Warning: TCP unavailable — progress updates disabled"}
+		}
+		auth, _ := json.Marshal(map[string]string{"type": "auth", "token": token})
+		if _, err := fmt.Fprintf(conn, "%s\n", auth); err != nil {
+			conn.Close()
+			return tcpNotifMsg{text: "Warning: TCP auth failed — progress updates disabled"}
+		}
+		return tcpConnectedMsg{conn: conn}
 	}
-
-	authMsg, err := json.Marshal(map[string]string{"type": "auth", "token": a.Token})
-	if err != nil {
-		conn.Close()
-		fmt.Println("Warning: TCP auth marshal failed:", err)
-		return
-	}
-	if _, err := fmt.Fprintf(conn, "%s\n", authMsg); err != nil {
-		conn.Close()
-		fmt.Println("Warning: TCP auth send failed:", err)
-		return
-	}
-
-	a.TCPConn = conn
-	go a.listenTCP(conn)
 }
 
-func (a *App) listenTCP(conn net.Conn) {
-	defer conn.Close()
-	scanner := bufio.NewScanner(conn)
-	for scanner.Scan() {
+// waitForTCP blocks until one message arrives on conn, then returns it as a
+// tcpNotifMsg. The caller must re-issue this Cmd after each message.
+func waitForTCP(conn net.Conn) tea.Cmd {
+	return func() tea.Msg {
+		scanner := bufio.NewScanner(conn)
+		if !scanner.Scan() {
+			return tcpNotifMsg{text: "TCP connection closed"}
+		}
 		var msg tcpServerMsg
 		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
-			continue
+			return tcpNotifMsg{text: "TCP: unreadable message"}
 		}
 		switch msg.Type {
 		case "auth_ok":
-			// silent confirmation
+			return tcpNotifMsg{text: ""}
 		case "progress_update":
-			fmt.Printf("\nProgress updated: %s → chapter %d\n> ", msg.MangaID, msg.Chapter)
+			name := msg.MangaTitle
+			if name == "" {
+				name = msg.MangaID
+			}
+			return tcpNotifMsg{text: fmt.Sprintf("Progress updated: %s → Chapter %d", name, msg.Chapter)}
 		case "error":
-			fmt.Printf("\nTCP server error: %s\n> ", msg.Message)
+			return tcpNotifMsg{text: "TCP: " + msg.Message}
+		default:
+			return tcpNotifMsg{text: ""}
 		}
 	}
 }

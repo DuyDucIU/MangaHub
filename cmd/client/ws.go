@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gorilla/websocket"
 )
 
@@ -16,80 +16,60 @@ type wsInMsg struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-func (a *App) enterChatRoom() {
-	mangaID := a.prompt("Enter manga ID (or press Enter for general): ")
-	if mangaID == "" {
-		mangaID = "general"
+// cmdConnectWS dials the WebSocket server, sends the JWT auth message, and
+// returns wsConnectedMsg on success or errMsg on failure.
+func cmdConnectWS(baseURL, token, mangaID string) tea.Cmd {
+	return func() tea.Msg {
+		wsURL := strings.Replace(baseURL, "http://", "ws://", 1) +
+			"/ws/chat?manga_id=" + mangaID
+		dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+		conn, _, err := dialer.Dial(wsURL, nil)
+		if err != nil {
+			return errMsg{text: "Chat connect failed: " + err.Error()}
+		}
+		if err := conn.WriteJSON(map[string]string{"token": token}); err != nil {
+			conn.Close()
+			return errMsg{text: "Chat auth failed: " + err.Error()}
+		}
+		return wsConnectedMsg{conn: conn}
 	}
+}
 
-	wsURL := strings.Replace(a.BaseURL, "http://", "ws://", 1) + "/ws/chat?manga_id=" + mangaID
-
-	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
-	conn, _, err := dialer.Dial(wsURL, nil)
-	if err != nil {
-		fmt.Println("Error connecting to chat:", err)
-		return
-	}
-	defer conn.Close()
-
-	// first message must be the JWT token
-	if err := conn.WriteJSON(map[string]string{"token": a.Token}); err != nil {
-		fmt.Println("Error sending auth:", err)
-		return
-	}
-
-	done := make(chan struct{})
-
-	// reader goroutine: receives messages from server and prints them
-	go func() {
-		defer close(done)
-		for {
-			var msg wsInMsg
-			if err := conn.ReadJSON(&msg); err != nil {
-				return
+// waitForWS blocks until one WebSocket message arrives, then returns it as
+// wsMsgReceived / wsJoined / wsLeft. The caller must re-issue this Cmd.
+func waitForWS(conn *websocket.Conn) tea.Cmd {
+	return func() tea.Msg {
+		var msg wsInMsg
+		if err := conn.ReadJSON(&msg); err != nil {
+			return errMsg{text: "Chat disconnected"}
+		}
+		switch msg.Type {
+		case "message":
+			return wsMsgReceived{
+				userID:   msg.UserID,
+				username: msg.Username,
+				text:     msg.Message,
 			}
-			switch msg.Type {
-			case "message":
-				label := msg.Username
-				if msg.UserID == a.UserID {
-					label = "You"
-				}
-				fmt.Printf("\r[%-8s] %s\n> ", label, msg.Message)
-			case "join":
-				fmt.Printf("\r%s joined the room\n> ", msg.Username)
-			case "leave":
-				fmt.Printf("\r%s left the room\n> ", msg.Username)
-			}
+		case "join":
+			return wsJoined{username: msg.Username}
+		case "leave":
+			return wsLeft{username: msg.Username}
+		default:
+			return wsMsgReceived{}
 		}
-	}()
+	}
+}
 
-	fmt.Printf("\n=== Chat Room: %s ===\n", mangaID)
-	fmt.Println("(type a message and press Enter, /exit to leave)")
-	fmt.Println()
-
-	for {
-		fmt.Print("> ")
-		a.scanner.Scan()
-		text := strings.TrimSpace(a.scanner.Text())
-		if text == "/exit" {
-			break
-		}
-		if text == "" {
-			continue
-		}
-		if err := conn.WriteJSON(map[string]interface{}{
+// cmdSendWSMessage sends one message over the WebSocket.
+func cmdSendWSMessage(conn *websocket.Conn, text string) tea.Cmd {
+	return func() tea.Msg {
+		err := conn.WriteJSON(map[string]interface{}{
 			"message":   text,
 			"timestamp": time.Now().Unix(),
-		}); err != nil {
-			fmt.Println("Error sending message:", err)
-			break
+		})
+		if err != nil {
+			return errMsg{text: "Send failed: " + err.Error()}
 		}
-	}
-
-	conn.WriteMessage(websocket.CloseMessage, //nolint:errcheck
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-	select {
-	case <-done:
-	case <-time.After(time.Second):
+		return waitForWS(conn)
 	}
 }

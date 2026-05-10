@@ -116,7 +116,8 @@ func (s *Service) SearchManga(ctx context.Context, req *pb.SearchRequest) (*pb.S
 
 func (s *Service) UpdateProgress(ctx context.Context, req *pb.ProgressRequest) (*pb.ProgressResponse, error) {
 	var totalChapters int32
-	err := s.DB.QueryRowContext(ctx, "SELECT total_chapters FROM manga WHERE id = ?", req.MangaId).Scan(&totalChapters)
+	var mangaTitle string
+	err := s.DB.QueryRowContext(ctx, "SELECT total_chapters, title FROM manga WHERE id = ?", req.MangaId).Scan(&totalChapters, &mangaTitle)
 	if err == sql.ErrNoRows {
 		return nil, grpcstatus.Errorf(grpccodes.NotFound, "manga %q not found", req.MangaId)
 	}
@@ -153,7 +154,7 @@ func (s *Service) UpdateProgress(ctx context.Context, req *pb.ProgressRequest) (
 		return nil, grpcstatus.Errorf(grpccodes.Internal, "db: %v", err)
 	}
 
-	s.pushTCPBroadcast(req.UserId, req.MangaId, req.CurrentChapter)
+	s.pushTCPBroadcast(req.UserId, req.MangaId, mangaTitle, req.CurrentChapter)
 
 	return &pb.ProgressResponse{MangaId: req.MangaId, CurrentChapter: req.CurrentChapter, Status: newStatus}, nil
 }
@@ -161,15 +162,16 @@ func (s *Service) UpdateProgress(ctx context.Context, req *pb.ProgressRequest) (
 // pushTCPBroadcast enqueues a progress update onto the TCP server's buffered channel.
 // Non-blocking: logs and drops if the channel is full rather than stalling the gRPC call.
 // No-op when TCPBroadcast is nil (standalone grpc-server binary).
-func (s *Service) pushTCPBroadcast(userID, mangaID string, chapter int32) {
+func (s *Service) pushTCPBroadcast(userID, mangaID, mangaTitle string, chapter int32) {
 	if s.TCPBroadcast == nil {
 		return
 	}
 	update := tcp.ProgressUpdate{
-		UserID:    userID,
-		MangaID:   mangaID,
-		Chapter:   int(chapter),
-		Timestamp: time.Now().Unix(),
+		UserID:     userID,
+		MangaID:    mangaID,
+		MangaTitle: mangaTitle,
+		Chapter:    int(chapter),
+		Timestamp:  time.Now().Unix(),
 	}
 	select {
 	case s.TCPBroadcast <- update:

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type udpInPkt struct {
@@ -12,48 +14,47 @@ type udpInPkt struct {
 	MangaID string `json:"manga_id"`
 }
 
-func (a *App) connectUDP() {
-	serverAddr, err := net.ResolveUDPAddr("udp", getenv("UDP_ADDR", "localhost:9091"))
-	if err != nil {
-		fmt.Println("Warning: could not resolve UDP server:", err)
-		return
+// cmdConnectUDP opens a local UDP socket, sends a register packet to serverAddr,
+// and returns udpConnectedMsg on success or udpNotifMsg with a warning on failure.
+func cmdConnectUDP(serverAddr string) tea.Cmd {
+	return func() tea.Msg {
+		srv, err := net.ResolveUDPAddr("udp", serverAddr)
+		if err != nil {
+			return udpNotifMsg{text: "Warning: UDP unavailable — chapter notifications disabled"}
+		}
+		conn, err := net.ListenUDP("udp", &net.UDPAddr{})
+		if err != nil {
+			return udpNotifMsg{text: "Warning: UDP unavailable — chapter notifications disabled"}
+		}
+		reg, _ := json.Marshal(map[string]interface{}{"type": "register", "manga_ids": []string{}})
+		if _, err := conn.WriteToUDP(reg, srv); err != nil {
+			conn.Close()
+			return udpNotifMsg{text: "Warning: UDP registration failed — chapter notifications disabled"}
+		}
+		return udpConnectedMsg{conn: conn}
 	}
-
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{})
-	if err != nil {
-		fmt.Println("Warning: could not start UDP listener:", err)
-		fmt.Println("Chapter notifications will not be received.")
-		return
-	}
-
-	reg, _ := json.Marshal(map[string]interface{}{"type": "register", "manga_ids": []string{}})
-	if _, err := conn.WriteToUDP(reg, serverAddr); err != nil {
-		conn.Close()
-		fmt.Println("Warning: UDP registration failed:", err)
-		return
-	}
-
-	a.UDPConn = conn
-	go a.listenUDP(conn)
 }
 
-func (a *App) listenUDP(conn *net.UDPConn) {
-	defer conn.Close()
-	buf := make([]byte, 65535)
-	for {
+// waitForUDP blocks until one UDP packet arrives, then returns it as a
+// udpNotifMsg. The caller must re-issue this Cmd after each message.
+func waitForUDP(conn *net.UDPConn) tea.Cmd {
+	return func() tea.Msg {
+		buf := make([]byte, 65535)
 		n, _, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			return // connection closed on logout
+			return udpNotifMsg{text: "UDP connection closed"}
 		}
 		var pkt udpInPkt
 		if err := json.Unmarshal(buf[:n], &pkt); err != nil {
-			continue
+			return udpNotifMsg{text: ""}
 		}
 		switch pkt.Type {
 		case "ack":
-			fmt.Printf("\nNotifications active: %s\n> ", pkt.Message)
+			return udpNotifMsg{text: fmt.Sprintf("Notifications active: %s", pkt.Message)}
 		case "notification":
-			fmt.Printf("\nNotification: %s\n> ", pkt.Message)
+			return udpNotifMsg{text: fmt.Sprintf("Notification: %s", pkt.Message)}
+		default:
+			return udpNotifMsg{text: ""}
 		}
 	}
 }
