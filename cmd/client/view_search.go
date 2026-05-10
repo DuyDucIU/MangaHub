@@ -200,7 +200,9 @@ func updateSearch(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notifications = pushNotif(m.notifications, "Add failed: "+msg.err)
 		} else {
 			m.notifications = pushNotif(m.notifications, fmt.Sprintf("Added %q to library.", m.detailManga.Title))
-			return m, cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID)
+			m.detailPending = m.detailManga.ID
+			m.detailLoading = true
+			return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID), m.spinner.Tick)
 		}
 		return m, nil
 
@@ -209,7 +211,9 @@ func updateSearch(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notifications = pushNotif(m.notifications, "Update failed: "+msg.err)
 		} else {
 			m.notifications = pushNotif(m.notifications, fmt.Sprintf("Progress updated for %q.", m.detailManga.Title))
-			return m, cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID)
+			m.detailPending = m.detailManga.ID
+			m.detailLoading = true
+			return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID), m.spinner.Tick)
 		}
 		return m, nil
 

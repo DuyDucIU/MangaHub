@@ -199,7 +199,6 @@ type Model struct {
 
 	// search view (searchState enum removed)
 	searchInputFocused bool
-	searchFocusPane    int
 	detailPending      string
 	searchInputs       []textinput.Model
 	searchFocus        int
@@ -209,7 +208,6 @@ type Model struct {
 	searchTotal        int
 	detailManga        mangaItem
 	detailEntry        *libraryItem
-	detailFocus        int
 
 	// loading states
 	searchLoading  bool
