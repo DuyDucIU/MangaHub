@@ -183,7 +183,7 @@ func submitModalProgress(m Model) (Model, tea.Cmd) {
 		return m, cmdAddToLibrary(m.baseURL, m.token, m.detailManga.ID, status, chapter)
 	}
 	mangaID := m.detailManga.ID
-	if len(m.libraryFlat) > m.libraryCursor {
+	if m.currentView == viewLibrary && len(m.libraryFlat) > m.libraryCursor {
 		mangaID = m.libraryFlat[m.libraryCursor].MangaID
 	}
 	return m, cmdUpdateProgress(m.baseURL, m.token, mangaID, status, chapter)
