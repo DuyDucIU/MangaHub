@@ -284,10 +284,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tcpNotifMsg:
 		if msg.text != "" {
-			m.notifications = append([]string{msg.text}, m.notifications...)
-			if len(m.notifications) > 20 {
-				m.notifications = m.notifications[:20]
-			}
+			m.notifications = pushNotif(m.notifications, msg.text)
 		}
 		if m.tcpConn != nil {
 			return m, waitForTCP(m.tcpConn)
@@ -296,10 +293,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case udpNotifMsg:
 		if msg.text != "" {
-			m.notifications = append([]string{msg.text}, m.notifications...)
-			if len(m.notifications) > 20 {
-				m.notifications = m.notifications[:20]
-			}
+			m.notifications = pushNotif(m.notifications, msg.text)
 		}
 		if m.udpConn != nil {
 			return m, waitForUDP(m.udpConn)
@@ -374,6 +368,16 @@ func renderHeader(m Model) string {
 		gap = 0
 	}
 	return styleHeader.Width(m.width).Render(left + strings.Repeat(" ", gap) + right)
+}
+
+const maxNotifications = 20
+
+func pushNotif(notifs []string, text string) []string {
+	n := append([]string{text}, notifs...)
+	if len(n) > maxNotifications {
+		n = n[:maxNotifications]
+	}
+	return n
 }
 
 func renderFooter(m Model) string {

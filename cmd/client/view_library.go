@@ -36,10 +36,7 @@ func updateLibrary(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case libraryResultMsg:
 		if msg.err != "" {
-			m.notifications = append([]string{"Library error: " + msg.err}, m.notifications...)
-			if len(m.notifications) > 20 {
-				m.notifications = m.notifications[:20]
-			}
+			m.notifications = pushNotif(m.notifications, "Library error: "+msg.err)
 			return m, nil
 		}
 		m.libraryGroups = msg.groups
