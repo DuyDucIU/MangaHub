@@ -277,6 +277,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
+		// Global keys — intercept before modal and view routing
+		if m.activeModal == modalNone {
+			switch msg.String() {
+			case "q":
+				closeConns(m)
+				return m, tea.Quit
+			case "?":
+				m.activeModal = modalHelp
+				return m, nil
+			case "n":
+				m.activeModal = modalNotifications
+				return m, nil
+			case "c":
+				if m.token != "" && m.currentView != viewChat {
+					m = openModalJoinChat(m)
+					return m, textinput.Blink
+				}
+			}
+		}
+
+		// Modal intercepts all remaining keys when open
+		if m.activeModal != modalNone {
+			var cmd tea.Cmd
+			m, cmd = updateModal(m, msg)
+			return m, cmd
+		}
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -307,6 +334,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case udpConnectedMsg:
 		m.udpConn = msg.conn
 		return m, waitForUDP(msg.conn)
+
+	case removeLibraryMsg:
+		if msg.err != "" {
+			m.notifications = pushNotif(m.notifications, "Remove failed: "+msg.err)
+			return m, nil
+		}
+		m.notifications = pushNotif(m.notifications, "Removed from library.")
+		if m.currentView == viewLibrary {
+			m.libraryLoading = true
+			return m, tea.Batch(cmdFetchLibrary(m.baseURL, m.token), m.spinner.Tick)
+		}
+		return m, nil
+
+	case libraryResultMsg:
+		if msg.err != "" {
+			m.notifications = pushNotif(m.notifications, "Library error: "+msg.err)
+			m.libraryLoading = false
+			return m, nil
+		}
+		// Always update dashboard reading list
+		reading := msg.groups["reading"]
+		if len(reading) > 3 {
+			reading = reading[:3]
+		}
+		m.dashboardReading = reading
+		// If on library view, also populate full library state
+		if m.currentView == viewLibrary {
+			m.libraryGroups = msg.groups
+			m.libraryFlat = flattenLibrary(msg.groups)
+			m.libraryCursor = 0
+			m.libraryLoading = false
+		}
+		return m, nil
 	}
 
 	switch m.currentView {
@@ -390,6 +450,9 @@ func renderFooter(m Model) string {
 
 // renderContent dispatches to the active view's render function.
 func renderContent(m Model, width, height int) string {
+	if m.activeModal != modalNone {
+		return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, renderModal(m))
+	}
 	switch m.currentView {
 	case viewLogin, viewRegister:
 		return renderAuth(m, width, height)

@@ -185,6 +185,9 @@ func renderMessages(m Model) string {
 }
 
 func renderChatScreen(m Model) string {
+	if m.activeModal != modalNone {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, renderModal(m))
+	}
 	if m.chatPrompting {
 		return renderChatPrompt(m)
 	}

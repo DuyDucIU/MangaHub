@@ -34,16 +34,6 @@ func flattenLibrary(groups map[string][]libraryItem) []libraryItem {
 
 func updateLibrary(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case libraryResultMsg:
-		if msg.err != "" {
-			m.notifications = pushNotif(m.notifications, "Library error: "+msg.err)
-			return m, nil
-		}
-		m.libraryGroups = msg.groups
-		m.libraryFlat = flattenLibrary(msg.groups)
-		m.libraryCursor = 0
-		return m, nil
-
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":

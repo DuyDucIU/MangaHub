@@ -70,19 +70,8 @@ func activateSidebarItem(m Model) (Model, tea.Cmd) {
 		m.chatPromptInput = inp
 		return m, textinput.Blink
 	case "Logout":
-		if m.tcpConn != nil {
-			m.tcpConn.Close()
-			m.tcpConn = nil
-		}
-		if m.udpConn != nil {
-			m.udpConn.Close()
-			m.udpConn = nil
-		}
-		m.token = ""
-		m.userID = ""
-		m.username = ""
-		m.sidebarIdx = 0
-		m.currentView = viewMenu
+		m = openModalConfirm(m, confirmLogout, "")
+		return m, nil
 	}
 	return m, nil
 }
