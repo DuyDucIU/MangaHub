@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
@@ -24,14 +25,25 @@ const (
 	viewChat
 )
 
-// --- Sub-state enums ---
+// --- Modal / overlay enums ---
 
-type searchState int
+type modalType int
 
 const (
-	searchStateForm searchState = iota
-	searchStateResults
-	searchStateDetail
+	modalNone modalType = iota
+	modalJoinChat
+	modalUpdateProgress
+	modalConfirmAction
+	modalError
+	modalHelp
+	modalNotifications
+)
+
+type confirmAction int
+
+const (
+	confirmLogout confirmAction = iota
+	confirmRemoveManga
 )
 
 // --- Shared data types ---
@@ -102,6 +114,7 @@ type loginSuccessMsg struct {
 type registerSuccessMsg struct{}
 type addLibraryMsg     struct{ err string }
 type updateProgressMsg struct{ err string }
+type removeLibraryMsg  struct{ err string }
 type errMsg            struct{ text string }
 
 // --- Lipgloss styles ---
@@ -173,33 +186,53 @@ type Model struct {
 	tcpConn net.Conn
 	udpConn *net.UDPConn
 
-	// notification footer (stays until replaced)
-	notification string
+	// notification history (newest first, max 20)
+	notifications []string
 
 	// terminal dimensions
 	width, height int
 
-	// auth forms (shared for login + register; re-initialised on view switch)
+	// auth forms
 	authInputs []textinput.Model
 	authFocus  int
 	authErr    string
 
-	// search view
-	searchState   searchState
-	searchInputs  []textinput.Model
-	searchFocus   int
-	searchResults []mangaItem
-	searchCursor  int
-	searchPage    int
-	searchTotal   int
-	detailManga   mangaItem
-	detailEntry   *libraryItem
-	detailFocus   int // 0=action button, irrelevant when no actions
+	// search view (searchState enum removed)
+	searchInputFocused bool
+	searchFocusPane    int
+	detailPending      string
+	searchInputs       []textinput.Model
+	searchFocus        int
+	searchResults      []mangaItem
+	searchCursor       int
+	searchPage         int
+	searchTotal        int
+	detailManga        mangaItem
+	detailEntry        *libraryItem
+	detailFocus        int
+
+	// loading states
+	searchLoading  bool
+	detailLoading  bool
+	libraryLoading bool
+	spinner        spinner.Model
 
 	// library view
 	libraryGroups map[string][]libraryItem
 	libraryFlat   []libraryItem
 	libraryCursor int
+
+	// dashboard (top 3 reading items, populated at login)
+	dashboardReading []libraryItem
+
+	// modal / overlay system
+	activeModal       modalType
+	modalInput        textinput.Model
+	modalInputFocused bool
+	modalCursor       int
+	modalMessage      string
+	modalConfirmAct   confirmAction
+	modalIsAdding     bool
 
 	// chat view
 	chatMangaID     string
@@ -212,10 +245,13 @@ type Model struct {
 }
 
 func New(baseURL string) Model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
 	return Model{
 		baseURL:     baseURL,
 		currentView: viewMenu,
 		sidebarIdx:  0,
+		spinner:     s,
 	}
 }
 
@@ -241,9 +277,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
 	case tcpNotifMsg:
 		if msg.text != "" {
-			m.notification = msg.text
+			m.notifications = append([]string{msg.text}, m.notifications...)
+			if len(m.notifications) > 20 {
+				m.notifications = m.notifications[:20]
+			}
 		}
 		if m.tcpConn != nil {
 			return m, waitForTCP(m.tcpConn)
@@ -251,7 +295,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case udpNotifMsg:
-		m.notification = msg.text
+		if msg.text != "" {
+			m.notifications = append([]string{msg.text}, m.notifications...)
+			if len(m.notifications) > 20 {
+				m.notifications = m.notifications[:20]
+			}
+		}
 		if m.udpConn != nil {
 			return m, waitForUDP(m.udpConn)
 		}
@@ -329,8 +378,8 @@ func renderHeader(m Model) string {
 
 func renderFooter(m Model) string {
 	text := ""
-	if m.notification != "" {
-		text = "  " + m.notification
+	if len(m.notifications) > 0 {
+		text = "  " + m.notifications[0]
 	}
 	return styleNotif.Width(m.width).Render(text)
 }

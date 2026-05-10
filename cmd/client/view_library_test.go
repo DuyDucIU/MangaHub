@@ -31,7 +31,7 @@ func TestLibraryNavDown(t *testing.T) {
 	}
 	m.libraryCursor = 0
 
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m2 := next.(Model)
 	assert.Equal(t, 1, m2.libraryCursor)
 }

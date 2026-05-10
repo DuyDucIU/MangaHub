@@ -19,6 +19,6 @@ func TestUDPNotifWithConn(t *testing.T) {
 
 	next, cmd := m.Update(udpNotifMsg{text: "Bleach chapter 700 released!"})
 	m2 := next.(Model)
-	assert.Equal(t, "Bleach chapter 700 released!", m2.notification)
+	assert.Equal(t, []string{"Bleach chapter 700 released!"}, m2.notifications)
 	assert.NotNil(t, cmd) // has conn → re-subscribes
 }

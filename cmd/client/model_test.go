@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -23,18 +24,27 @@ func TestWindowResize(t *testing.T) {
 	assert.Equal(t, 40, m2.height)
 }
 
-func TestTCPNotifNoConn(t *testing.T) {
+func TestTCPNotifAppendsToHistory(t *testing.T) {
 	m := New("http://localhost:8080")
-	next, cmd := m.Update(tcpNotifMsg{text: "progress update"})
+	next, _ := m.Update(tcpNotifMsg{text: "update1"})
 	m2 := next.(Model)
-	assert.Equal(t, "progress update", m2.notification)
-	assert.Nil(t, cmd) // no conn → no re-subscribe
+	assert.Equal(t, []string{"update1"}, m2.notifications)
 }
 
-func TestUDPNotifNoConn(t *testing.T) {
+func TestNotifHistoryCappedAt20(t *testing.T) {
 	m := New("http://localhost:8080")
-	next, cmd := m.Update(udpNotifMsg{text: "chapter released"})
+	for i := range 20 {
+		m.notifications = append([]string{fmt.Sprintf("msg%d", i)}, m.notifications...)
+	}
+	next, _ := m.Update(tcpNotifMsg{text: "new"})
 	m2 := next.(Model)
-	assert.Equal(t, "chapter released", m2.notification)
-	assert.Nil(t, cmd)
+	assert.Len(t, m2.notifications, 20)
+	assert.Equal(t, "new", m2.notifications[0])
+}
+
+func TestUDPNotifAppendsToHistory(t *testing.T) {
+	m := New("http://localhost:8080")
+	next, _ := m.Update(udpNotifMsg{text: "chapter"})
+	m2 := next.(Model)
+	assert.Equal(t, []string{"chapter"}, m2.notifications)
 }

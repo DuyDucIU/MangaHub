@@ -20,19 +20,13 @@ func updateMenu(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		items := sidebarItems(m)
 		switch msg.String() {
-		case "up", "k":
+		case "up":
 			if m.sidebarIdx > 0 {
 				m.sidebarIdx--
 			}
-		case "down", "j":
+		case "down":
 			if m.sidebarIdx < len(items)-1 {
 				m.sidebarIdx++
-			}
-		case "1", "2", "3", "4":
-			idx := int(msg.Runes[0]-'1')
-			if idx < len(items) {
-				m.sidebarIdx = idx
-				return activateSidebarItem(m)
 			}
 		case "enter":
 			return activateSidebarItem(m)
@@ -49,7 +43,6 @@ func activateSidebarItem(m Model) (Model, tea.Cmd) {
 	switch items[m.sidebarIdx] {
 	case "Search":
 		m.currentView = viewSearch
-		m.searchState = searchStateForm
 		m.searchInputs = initSearchInputs()
 		m.searchFocus = 0
 		m.searchResults = nil

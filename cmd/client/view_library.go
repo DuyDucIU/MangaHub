@@ -36,7 +36,10 @@ func updateLibrary(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case libraryResultMsg:
 		if msg.err != "" {
-			m.notification = "Library error: " + msg.err
+			m.notifications = append([]string{"Library error: " + msg.err}, m.notifications...)
+			if len(m.notifications) > 20 {
+				m.notifications = m.notifications[:20]
+			}
 			return m, nil
 		}
 		m.libraryGroups = msg.groups
@@ -48,11 +51,11 @@ func updateLibrary(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "esc":
 			m.currentView = viewMenu
-		case "up", "k":
+		case "up":
 			if m.libraryCursor > 0 {
 				m.libraryCursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.libraryCursor < len(m.libraryFlat)-1 {
 				m.libraryCursor++
 			}
@@ -60,7 +63,7 @@ func updateLibrary(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.libraryCursor < len(m.libraryFlat) {
 				id := m.libraryFlat[m.libraryCursor].MangaID
 				m.currentView = viewSearch
-				m.searchState = searchStateDetail
+				m.searchFocusPane = searchPaneDetail
 				return m, cmdFetchDetail(m.baseURL, m.token, id)
 			}
 		}

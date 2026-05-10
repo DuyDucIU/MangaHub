@@ -18,6 +18,6 @@ func TestTCPNotifWithConn(t *testing.T) {
 
 	next, cmd := m.Update(tcpNotifMsg{text: "One Piece → chapter 1096"})
 	m2 := next.(Model)
-	assert.Equal(t, "One Piece → chapter 1096", m2.notification)
+	assert.Equal(t, []string{"One Piece → chapter 1096"}, m2.notifications)
 	assert.NotNil(t, cmd) // has conn → re-subscribes
 }

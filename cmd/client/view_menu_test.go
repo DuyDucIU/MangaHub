@@ -24,7 +24,7 @@ func TestSidebarItemsAuth(t *testing.T) {
 func TestMenuNavDown(t *testing.T) {
 	m := New("http://localhost:8080")
 	m.sidebarIdx = 0
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m2 := next.(Model)
 	assert.Equal(t, 1, m2.sidebarIdx)
 }

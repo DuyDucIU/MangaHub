@@ -13,6 +13,13 @@ import (
 
 const searchPageSize = 20
 
+// searchFocusPane values (replaces searchState enum)
+const (
+	searchPaneForm    = 0
+	searchPaneResults = 1
+	searchPaneDetail  = 2
+)
+
 type searchResponse struct {
 	Results  []mangaItem `json:"results"`
 	Count    int         `json:"count"`
@@ -166,58 +173,76 @@ func updateSearch(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case searchResultMsg:
 		if msg.err != "" {
-			m.notification = "Search error: " + msg.err
+			m.notifications = append([]string{"Search error: " + msg.err}, m.notifications...)
+			if len(m.notifications) > 20 {
+				m.notifications = m.notifications[:20]
+			}
 			return m, nil
 		}
 		m.searchResults = msg.results
 		m.searchTotal = msg.total
 		m.searchPage = msg.page
 		m.searchCursor = 0
-		m.searchState = searchStateResults
+		m.searchFocusPane = searchPaneResults
 		return m, nil
 
 	case detailResultMsg:
 		if msg.err != "" {
-			m.notification = "Error: " + msg.err
+			m.notifications = append([]string{"Error: " + msg.err}, m.notifications...)
+			if len(m.notifications) > 20 {
+				m.notifications = m.notifications[:20]
+			}
 			return m, nil
 		}
 		m.detailManga = msg.manga
 		m.detailEntry = msg.entry
-		m.searchState = searchStateDetail
+		m.searchFocusPane = searchPaneDetail
 		m.detailFocus = 0
 		return m, nil
 
 	case addLibraryMsg:
 		if msg.err != "" {
-			m.notification = "Add failed: " + msg.err
+			m.notifications = append([]string{"Add failed: " + msg.err}, m.notifications...)
 		} else {
-			m.notification = fmt.Sprintf("Added %q to library.", m.detailManga.Title)
+			m.notifications = append([]string{fmt.Sprintf("Added %q to library.", m.detailManga.Title)}, m.notifications...)
 			// refresh entry
+			if len(m.notifications) > 20 {
+				m.notifications = m.notifications[:20]
+			}
 			return m, cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID)
+		}
+		if len(m.notifications) > 20 {
+			m.notifications = m.notifications[:20]
 		}
 		return m, nil
 
 	case updateProgressMsg:
 		if msg.err != "" {
-			m.notification = "Update failed: " + msg.err
+			m.notifications = append([]string{"Update failed: " + msg.err}, m.notifications...)
 		} else {
-			m.notification = fmt.Sprintf("Progress updated for %q.", m.detailManga.Title)
+			m.notifications = append([]string{fmt.Sprintf("Progress updated for %q.", m.detailManga.Title)}, m.notifications...)
+			if len(m.notifications) > 20 {
+				m.notifications = m.notifications[:20]
+			}
 			return m, cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID)
+		}
+		if len(m.notifications) > 20 {
+			m.notifications = m.notifications[:20]
 		}
 		return m, nil
 
 	case tea.KeyMsg:
-		switch m.searchState {
-		case searchStateForm:
+		switch m.searchFocusPane {
+		case searchPaneForm:
 			return updateSearchForm(m, msg)
-		case searchStateResults:
+		case searchPaneResults:
 			return updateSearchResults(m, msg)
-		case searchStateDetail:
+		case searchPaneDetail:
 			return updateSearchDetail(m, msg)
 		}
 	}
-	// propagate to focused input when in form state
-	if m.searchState == searchStateForm && len(m.searchInputs) > 0 {
+	// propagate to focused input when in form pane
+	if m.searchFocusPane == searchPaneForm && len(m.searchInputs) > 0 {
 		var cmd tea.Cmd
 		m.searchInputs[m.searchFocus], cmd = m.searchInputs[m.searchFocus].Update(msg)
 		return m, cmd
@@ -256,7 +281,7 @@ func updateSearchForm(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 func updateSearchResults(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		m.searchState = searchStateForm
+		m.searchFocusPane = searchPaneForm
 	case "up", "k":
 		if m.searchCursor > 0 {
 			m.searchCursor--
@@ -294,7 +319,7 @@ func updateSearchResults(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 func updateSearchDetail(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		m.searchState = searchStateResults
+		m.searchFocusPane = searchPaneResults
 	case "1":
 		// action 1: Add to library (if not in library) or Update progress (if in library)
 		if m.token == "" {
@@ -311,12 +336,12 @@ func updateSearchDetail(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 func renderSearch(m Model, width, height int) string {
-	switch m.searchState {
-	case searchStateForm:
+	switch m.searchFocusPane {
+	case searchPaneForm:
 		return renderSearchForm(m, width, height)
-	case searchStateResults:
+	case searchPaneResults:
 		return renderSearchResults(m, width, height)
-	case searchStateDetail:
+	case searchPaneDetail:
 		return renderSearchDetail(m, width, height)
 	}
 	return ""
