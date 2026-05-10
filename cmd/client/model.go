@@ -326,6 +326,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.udpConn = msg.conn
 		return m, waitForUDP(msg.conn)
 
+	case addLibraryMsg:
+		if msg.err != "" {
+			m.notifications = pushNotif(m.notifications, "Add failed: "+msg.err)
+			return m, nil
+		}
+		if m.currentView == viewSearch && m.detailManga.ID != "" {
+			m.detailPending = m.detailManga.ID
+			m.detailLoading = true
+			return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID), m.spinner.Tick)
+		}
+		return m, nil
+
+	case updateProgressMsg:
+		if msg.err != "" {
+			m.notifications = pushNotif(m.notifications, "Update failed: "+msg.err)
+			return m, nil
+		}
+		if m.currentView == viewLibrary {
+			m.libraryLoading = true
+			return m, tea.Batch(cmdFetchLibrary(m.baseURL, m.token), m.spinner.Tick)
+		}
+		if m.currentView == viewSearch && m.detailManga.ID != "" {
+			m.detailPending = m.detailManga.ID
+			m.detailLoading = true
+			return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID), m.spinner.Tick)
+		}
+		return m, nil
+
 	case removeLibraryMsg:
 		if msg.err != "" {
 			m.notifications = pushNotif(m.notifications, "Remove failed: "+msg.err)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -52,6 +53,7 @@ func openModalUpdateProgress(m Model, isAdding bool, currentChapter int, current
 	m.modalInputFocused = true
 	m.modalCursor = cursor
 	m.modalIsAdding = isAdding
+	m.modalMessage = ""
 	return m
 }
 
@@ -181,9 +183,28 @@ func updateModalProgress(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 }
 
+const maxChapter = 99999
+
 func submitModalProgress(m Model) (Model, tea.Cmd) {
+	raw := strings.TrimSpace(m.modalInput.Value())
 	chapter := 0
-	fmt.Sscanf(strings.TrimSpace(m.modalInput.Value()), "%d", &chapter)
+	if raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			m.modalMessage = "Chapter must be a non-negative number"
+			return m, nil
+		}
+		if n > maxChapter {
+			m.modalMessage = fmt.Sprintf("Chapter cannot exceed %d", maxChapter)
+			return m, nil
+		}
+		if m.detailManga.TotalChapters > 0 && n > m.detailManga.TotalChapters {
+			m.modalMessage = fmt.Sprintf("Chapter cannot exceed total (%d)", m.detailManga.TotalChapters)
+			return m, nil
+		}
+		chapter = n
+	}
+	m.modalMessage = ""
 	status := modalStatusOptions[m.modalCursor]
 	m.activeModal = modalNone
 	if m.modalIsAdding {
@@ -340,7 +361,11 @@ func renderModalUpdateProgress(m Model) string {
 		}
 	}
 
-	content := chapterLine + "\n\n" +
+	errLine := ""
+	if m.modalMessage != "" {
+		errLine = "\n" + styleError.Render("  "+m.modalMessage)
+	}
+	content := chapterLine + errLine + "\n\n" +
 		styleMutedText.Render("Status:") + "\n" +
 		strings.Join(statusLines, "\n") + "\n\n" +
 		styleMutedText.Render("[Tab] Switch    [Enter] Save    [Esc] Cancel")

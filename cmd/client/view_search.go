@@ -195,28 +195,6 @@ func updateSearch(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailLoading = false
 		return m, nil
 
-	case addLibraryMsg:
-		if msg.err != "" {
-			m.notifications = pushNotif(m.notifications, "Add failed: "+msg.err)
-		} else {
-			m.notifications = pushNotif(m.notifications, fmt.Sprintf("Added %q to library.", m.detailManga.Title))
-			m.detailPending = m.detailManga.ID
-			m.detailLoading = true
-			return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID), m.spinner.Tick)
-		}
-		return m, nil
-
-	case updateProgressMsg:
-		if msg.err != "" {
-			m.notifications = pushNotif(m.notifications, "Update failed: "+msg.err)
-		} else {
-			m.notifications = pushNotif(m.notifications, fmt.Sprintf("Progress updated for %q.", m.detailManga.Title))
-			m.detailPending = m.detailManga.ID
-			m.detailLoading = true
-			return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID), m.spinner.Tick)
-		}
-		return m, nil
-
 	case tea.KeyMsg:
 		return updateSearchKeys(m, msg)
 	}

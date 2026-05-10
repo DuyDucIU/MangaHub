@@ -25,7 +25,7 @@ func cmdFetchLibrary(baseURL, token string) tea.Cmd {
 }
 
 func flattenLibrary(groups map[string][]libraryItem) []libraryItem {
-	var flat []libraryItem
+	flat := make([]libraryItem, 0)
 	for _, s := range libraryStatusOrder {
 		flat = append(flat, groups[s]...)
 	}
