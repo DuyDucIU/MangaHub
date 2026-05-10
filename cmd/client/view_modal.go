@@ -14,10 +14,17 @@ var modalStatusOptions = []string{"reading", "plan_to_read", "completed", "on_ho
 // --- Open helpers ---
 
 func openModalJoinChat(m Model) Model {
+	return openModalJoinChatPrefilled(m, "")
+}
+
+func openModalJoinChatPrefilled(m Model, prefill string) Model {
 	inp := textinput.New()
 	inp.Placeholder = "manga ID or name (blank = general)"
 	inp.Focus()
 	inp.Width = 38
+	if prefill != "" {
+		inp.SetValue(prefill)
+	}
 	m.activeModal = modalJoinChat
 	m.modalInput = inp
 	return m
@@ -250,26 +257,26 @@ func modalBox(title, content string) string {
 func renderModalHelp() string {
 	lines := []string{
 		styleMutedText.Render("Global"),
-		"  ?    This help screen",
-		"  n    Notification center",
-		"  c    Join chat room",
-		"  Esc  Back / close",
-		"  q    Quit",
+		"  [?]    This help screen",
+		"  [n]    Notification center",
+		"  [c]    Join chat room",
+		"  [Esc]  Back / close",
+		"  [q]    Quit",
 		"",
 		styleMutedText.Render("Search"),
-		"  /    Focus search input",
-		"  ↑↓   Navigate results",
-		"  ←→   Previous / next page",
-		"  a    Add to library / update progress",
+		"  [/]    Focus search input",
+		"  [↑↓]   Navigate results",
+		"  [←→]   Previous / next page",
+		"  [a]    Add to library / update progress",
 		"",
 		styleMutedText.Render("Library"),
-		"  ↑↓   Navigate",
-		"  a    Update progress",
-		"  d    Remove from library",
+		"  [↑↓]   Navigate",
+		"  [a]    Update progress",
+		"  [d]    Remove from library",
 		"",
 		styleMutedText.Render("Chat"),
-		"  Enter   Send message",
-		"  /exit   Leave room",
+		"  [Enter]   Send message",
+		"  [/exit]   Leave room",
 	}
 	return modalBox("Keybindings", strings.Join(lines, "\n"))
 }
@@ -297,14 +304,14 @@ func renderModalConfirm(m Model) string {
 		action = "remove this manga from your library"
 	}
 	content := fmt.Sprintf("Are you sure you want to %s?\n\n", action) +
-		styleMutedText.Render("y  Yes    n / Esc  No")
+		styleMutedText.Render("[y] Yes    [n]/[Esc] No")
 	return modalBox("Confirm", content)
 }
 
 func renderModalJoinChat(m Model) string {
 	content := styleMutedText.Render("Manga ID (blank = general):") + "\n" +
 		m.modalInput.View() + "\n\n" +
-		styleMutedText.Render("Enter to join    Esc to cancel")
+		styleMutedText.Render("[Enter] Join    [Esc] Cancel")
 	return modalBox("Join Chat Room", content)
 }
 
@@ -336,6 +343,6 @@ func renderModalUpdateProgress(m Model) string {
 	content := chapterLine + "\n\n" +
 		styleMutedText.Render("Status:") + "\n" +
 		strings.Join(statusLines, "\n") + "\n\n" +
-		styleMutedText.Render("Tab switch    Enter save    Esc cancel")
+		styleMutedText.Render("[Tab] Switch    [Enter] Save    [Esc] Cancel")
 	return modalBox(title, content)
 }

@@ -241,6 +241,6 @@ func renderAuth(m Model, width, height int) string {
 	if m.authErr != "" {
 		sb.WriteString(styleError.Render("  "+m.authErr) + "\n\n")
 	}
-	sb.WriteString(styleMutedText.Render("  Tab/↑↓ move · Enter submit · Esc back") + "\n")
+	sb.WriteString(styleMutedText.Render("  [Tab]/[↑↓] Move · [Enter] Submit · [Esc] Back") + "\n")
 	return lipgloss.NewStyle().Width(width).Render(sb.String())
 }

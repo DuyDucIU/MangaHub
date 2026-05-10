@@ -109,7 +109,7 @@ func renderLibraryLeft(m Model, width, height int) string {
 			flatIdx++
 		}
 	}
-	sb.WriteString("\n" + styleMutedText.Render("  ↑↓ navigate  a update  d remove") + "\n")
+	sb.WriteString("\n" + styleMutedText.Render("  [↑↓] Navigate  [a] Update  [d] Remove") + "\n")
 	return sb.String()
 }
 

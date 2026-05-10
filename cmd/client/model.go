@@ -278,7 +278,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "c":
 				if m.token != "" && m.currentView != viewChat {
-					m = openModalJoinChat(m)
+					prefill := ""
+					if m.currentView == viewSearch && m.detailManga.ID != "" {
+						prefill = m.detailManga.ID
+					}
+					m = openModalJoinChatPrefilled(m, prefill)
 					return m, textinput.Blink
 				}
 			}

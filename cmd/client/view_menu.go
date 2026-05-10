@@ -72,11 +72,7 @@ func activateSidebarItem(m Model) (Model, tea.Cmd) {
 		m.libraryLoading = true
 		return m, tea.Batch(cmdFetchLibrary(m.baseURL, m.token), m.spinner.Tick)
 	case "Chat":
-		m.currentView = viewChat
-		m.chatPrompting = true
-		m.chatMessages = nil
-		inp := newChatPromptInput()
-		m.chatPromptInput = inp
+		m = openModalJoinChat(m)
 		return m, textinput.Blink
 	case "Logout":
 		m = openModalConfirm(m, confirmLogout, "")

@@ -354,7 +354,7 @@ func renderSearchLeft(m Model, width, height int) string {
 			}
 			sb.WriteString("\n" + styleMutedText.Render(label) + "\n")
 		} else {
-			sb.WriteString("\n" + styleMutedText.Render("  Search for manga using /") + "\n")
+			sb.WriteString("\n" + styleMutedText.Render("  Search for manga using [/]") + "\n")
 		}
 		return sb.String()
 	}
@@ -370,7 +370,11 @@ func renderSearchLeft(m Model, width, height int) string {
 			sb.WriteString(styleNormal.Render("  " + truncate(item.Title, width-4)) + "\n")
 		}
 	}
-	sb.WriteString("\n" + styleMutedText.Render("  ↑↓ navigate  ←→ page  / search  a add") + "\n")
+	hint := "  [↑↓] Navigate  [←→] Page  [/] Search"
+	if m.token != "" {
+		hint += "  [a] Add"
+	}
+	sb.WriteString("\n" + styleMutedText.Render(hint) + "\n")
 	return sb.String()
 }
 
