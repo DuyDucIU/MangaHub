@@ -13,13 +13,6 @@ import (
 
 const searchPageSize = 20
 
-// searchFocusPane values (replaces searchState enum)
-const (
-	searchPaneForm    = 0
-	searchPaneResults = 1
-	searchPaneDetail  = 2
-)
-
 type searchResponse struct {
 	Results  []mangaItem `json:"results"`
 	Count    int         `json:"count"`
@@ -113,7 +106,6 @@ func cmdFetchDetail(baseURL, token, id string) tea.Cmd {
 	}
 }
 
-// fetchLibraryEntry checks the user's library for a specific manga ID.
 func fetchLibraryEntry(baseURL, token, mangaID string) *libraryItem {
 	var resp libraryResponse
 	code, err := getJSON(baseURL+"/users/library", token, &resp)
@@ -173,76 +165,59 @@ func updateSearch(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case searchResultMsg:
 		if msg.err != "" {
-			m.notifications = append([]string{"Search error: " + msg.err}, m.notifications...)
-			if len(m.notifications) > 20 {
-				m.notifications = m.notifications[:20]
-			}
+			m.notifications = pushNotif(m.notifications, "Search error: "+msg.err)
+			m.searchLoading = false
 			return m, nil
 		}
 		m.searchResults = msg.results
 		m.searchTotal = msg.total
 		m.searchPage = msg.page
 		m.searchCursor = 0
-		m.searchFocusPane = searchPaneResults
+		m.searchLoading = false
+		if len(msg.results) > 0 {
+			id := msg.results[0].ID
+			m.detailPending = id
+			m.detailLoading = true
+			return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, id), m.spinner.Tick)
+		}
 		return m, nil
 
 	case detailResultMsg:
+		if msg.manga.ID != m.detailPending {
+			return m, nil // stale response — ignore
+		}
 		if msg.err != "" {
-			m.notifications = append([]string{"Error: " + msg.err}, m.notifications...)
-			if len(m.notifications) > 20 {
-				m.notifications = m.notifications[:20]
-			}
+			m.detailLoading = false
 			return m, nil
 		}
 		m.detailManga = msg.manga
 		m.detailEntry = msg.entry
-		m.searchFocusPane = searchPaneDetail
-		m.detailFocus = 0
+		m.detailLoading = false
 		return m, nil
 
 	case addLibraryMsg:
 		if msg.err != "" {
-			m.notifications = append([]string{"Add failed: " + msg.err}, m.notifications...)
+			m.notifications = pushNotif(m.notifications, "Add failed: "+msg.err)
 		} else {
-			m.notifications = append([]string{fmt.Sprintf("Added %q to library.", m.detailManga.Title)}, m.notifications...)
-			// refresh entry
-			if len(m.notifications) > 20 {
-				m.notifications = m.notifications[:20]
-			}
+			m.notifications = pushNotif(m.notifications, fmt.Sprintf("Added %q to library.", m.detailManga.Title))
 			return m, cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID)
-		}
-		if len(m.notifications) > 20 {
-			m.notifications = m.notifications[:20]
 		}
 		return m, nil
 
 	case updateProgressMsg:
 		if msg.err != "" {
-			m.notifications = append([]string{"Update failed: " + msg.err}, m.notifications...)
+			m.notifications = pushNotif(m.notifications, "Update failed: "+msg.err)
 		} else {
-			m.notifications = append([]string{fmt.Sprintf("Progress updated for %q.", m.detailManga.Title)}, m.notifications...)
-			if len(m.notifications) > 20 {
-				m.notifications = m.notifications[:20]
-			}
+			m.notifications = pushNotif(m.notifications, fmt.Sprintf("Progress updated for %q.", m.detailManga.Title))
 			return m, cmdFetchDetail(m.baseURL, m.token, m.detailManga.ID)
-		}
-		if len(m.notifications) > 20 {
-			m.notifications = m.notifications[:20]
 		}
 		return m, nil
 
 	case tea.KeyMsg:
-		switch m.searchFocusPane {
-		case searchPaneForm:
-			return updateSearchForm(m, msg)
-		case searchPaneResults:
-			return updateSearchResults(m, msg)
-		case searchPaneDetail:
-			return updateSearchDetail(m, msg)
-		}
+		return updateSearchKeys(m, msg)
 	}
-	// propagate to focused input when in form pane
-	if m.searchFocusPane == searchPaneForm && len(m.searchInputs) > 0 {
+
+	if m.searchInputFocused && len(m.searchInputs) > 0 {
 		var cmd tea.Cmd
 		m.searchInputs[m.searchFocus], cmd = m.searchInputs[m.searchFocus].Update(msg)
 		return m, cmd
@@ -250,162 +225,171 @@ func updateSearch(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func updateSearchForm(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
+func updateSearchKeys(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
+	if m.searchInputFocused {
+		switch msg.String() {
+		case "esc":
+			m.searchInputs[m.searchFocus].Blur()
+			m.searchInputFocused = false
+			return m, nil
+		case "enter":
+			m.searchInputFocused = false
+			m.searchInputs[m.searchFocus].Blur()
+			q := strings.TrimSpace(m.searchInputs[0].Value())
+			genre := strings.TrimSpace(m.searchInputs[1].Value())
+			status := strings.TrimSpace(m.searchInputs[2].Value())
+			m.searchPage = 1
+			m.searchLoading = true
+			return m, tea.Batch(cmdSearch(m.baseURL, m.token, q, genre, status, 1), m.spinner.Tick)
+		default:
+			var cmd tea.Cmd
+			m.searchInputs[m.searchFocus], cmd = m.searchInputs[m.searchFocus].Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg.String() {
 	case "esc":
 		m.currentView = viewMenu
-		return m, nil
-	case "tab", "down":
-		m.searchInputs[m.searchFocus].Blur()
-		m.searchFocus = (m.searchFocus + 1) % len(m.searchInputs)
+	case "/":
+		m.searchInputFocused = true
 		m.searchInputs[m.searchFocus].Focus()
 		return m, textinput.Blink
-	case "shift+tab", "up":
-		m.searchInputs[m.searchFocus].Blur()
-		m.searchFocus = (m.searchFocus - 1 + len(m.searchInputs)) % len(m.searchInputs)
-		m.searchInputs[m.searchFocus].Focus()
-		return m, textinput.Blink
-	case "enter":
-		q := strings.TrimSpace(m.searchInputs[0].Value())
-		genre := strings.TrimSpace(m.searchInputs[1].Value())
-		status := strings.TrimSpace(m.searchInputs[2].Value())
-		m.searchPage = 1
-		return m, cmdSearch(m.baseURL, m.token, q, genre, status, 1)
-	default:
-		var cmd tea.Cmd
-		m.searchInputs[m.searchFocus], cmd = m.searchInputs[m.searchFocus].Update(msg)
-		return m, cmd
-	}
-}
-
-func updateSearchResults(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.searchFocusPane = searchPaneForm
-	case "up", "k":
+	case "up":
 		if m.searchCursor > 0 {
 			m.searchCursor--
+			id := m.searchResults[m.searchCursor].ID
+			m.detailPending = id
+			m.detailLoading = true
+			return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, id), m.spinner.Tick)
 		}
-	case "down", "j":
+	case "down":
 		if m.searchCursor < len(m.searchResults)-1 {
 			m.searchCursor++
+			id := m.searchResults[m.searchCursor].ID
+			m.detailPending = id
+			m.detailLoading = true
+			return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, id), m.spinner.Tick)
 		}
-	case "right", "l":
+	case "right":
 		pages := totalPages(m.searchTotal, searchPageSize)
 		if m.searchPage < pages {
 			m.searchPage++
 			q := strings.TrimSpace(m.searchInputs[0].Value())
 			genre := strings.TrimSpace(m.searchInputs[1].Value())
 			status := strings.TrimSpace(m.searchInputs[2].Value())
-			return m, cmdSearch(m.baseURL, m.token, q, genre, status, m.searchPage)
+			m.searchLoading = true
+			return m, tea.Batch(cmdSearch(m.baseURL, m.token, q, genre, status, m.searchPage), m.spinner.Tick)
 		}
-	case "left", "h":
+	case "left":
 		if m.searchPage > 1 {
 			m.searchPage--
 			q := strings.TrimSpace(m.searchInputs[0].Value())
 			genre := strings.TrimSpace(m.searchInputs[1].Value())
 			status := strings.TrimSpace(m.searchInputs[2].Value())
-			return m, cmdSearch(m.baseURL, m.token, q, genre, status, m.searchPage)
+			m.searchLoading = true
+			return m, tea.Batch(cmdSearch(m.baseURL, m.token, q, genre, status, m.searchPage), m.spinner.Tick)
 		}
-	case "enter":
-		if m.searchCursor < len(m.searchResults) {
-			id := m.searchResults[m.searchCursor].ID
-			return m, cmdFetchDetail(m.baseURL, m.token, id)
+	case "a":
+		if m.token != "" && m.detailManga.ID != "" {
+			isAdding := m.detailEntry == nil
+			chapter := 0
+			status := "reading"
+			if !isAdding && m.detailEntry != nil {
+				chapter = m.detailEntry.CurrentChapter
+				status = m.detailEntry.Status
+			}
+			m = openModalUpdateProgress(m, isAdding, chapter, status)
+			return m, textinput.Blink
 		}
-	}
-	return m, nil
-}
-
-func updateSearchDetail(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.searchFocusPane = searchPaneResults
-	case "1":
-		// action 1: Add to library (if not in library) or Update progress (if in library)
-		if m.token == "" {
-			return m, nil
-		}
-		if m.detailEntry == nil {
-			// add with defaults
-			return m, cmdAddToLibrary(m.baseURL, m.token, m.detailManga.ID, "reading", 0)
-		}
-		// increment chapter by 1 as a quick update
-		return m, cmdUpdateProgress(m.baseURL, m.token, m.detailManga.ID, "", m.detailEntry.CurrentChapter+1)
 	}
 	return m, nil
 }
 
 func renderSearch(m Model, width, height int) string {
-	switch m.searchFocusPane {
-	case searchPaneForm:
-		return renderSearchForm(m, width, height)
-	case searchPaneResults:
-		return renderSearchResults(m, width, height)
-	case searchPaneDetail:
-		return renderSearchDetail(m, width, height)
-	}
-	return ""
+	leftWidth := width * 38 / 100
+	rightWidth := width - leftWidth - 1
+
+	left := lipgloss.NewStyle().Width(leftWidth).Height(height).Render(
+		renderSearchLeft(m, leftWidth, height),
+	)
+	divider := lipgloss.NewStyle().
+		Width(1).Height(height).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(colorMuted).
+		Render("")
+	right := lipgloss.NewStyle().Width(rightWidth).Height(height).Render(
+		renderSearchRight(m, rightWidth, height),
+	)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 }
 
-func renderSearchForm(m Model, width, height int) string {
+func renderSearchLeft(m Model, width, height int) string {
 	var sb strings.Builder
-	sb.WriteString("\n")
-	sb.WriteString(styleTitle.Render("  Search Manga") + "\n\n")
-	labels := []string{"Title / Author", "Genre", "Status"}
-	for i, inp := range m.searchInputs {
-		sb.WriteString(styleMutedText.Render("  "+labels[i]+":") + "\n")
-		sb.WriteString("  " + inp.View() + "\n\n")
+	inputPrefix := "  / "
+	if m.searchInputFocused {
+		inputPrefix = styleTitle.Render("  / ")
 	}
-	sb.WriteString(styleMutedText.Render("  Tab/↑↓ move · Enter search · Esc back") + "\n")
-	return lipgloss.NewStyle().Width(width).Render(sb.String())
-}
+	sb.WriteString(inputPrefix + m.searchInputs[0].View() + "\n")
+	sb.WriteString(styleMutedText.Render(strings.Repeat("─", width)) + "\n")
 
-func renderSearchResults(m Model, width, height int) string {
-	var sb strings.Builder
+	if m.searchLoading {
+		sb.WriteString("\n  " + m.spinner.View() + " Searching...\n")
+		return sb.String()
+	}
+	if len(m.searchResults) == 0 {
+		sb.WriteString("\n" + styleMutedText.Render("  Search for manga using /") + "\n")
+		return sb.String()
+	}
+
 	pages := totalPages(m.searchTotal, searchPageSize)
-	sb.WriteString(fmt.Sprintf("\n  Found %d result(s) — Page %d of %d\n\n",
-		m.searchTotal, m.searchPage, pages))
+	sb.WriteString(styleMutedText.Render(fmt.Sprintf(
+		"  %d result(s) — %d/%d", m.searchTotal, m.searchPage, pages)) + "\n")
 
 	for i, item := range m.searchResults {
-		line := fmt.Sprintf("  %-35s  %s", truncate(item.Title, 35), styleMutedText.Render(item.Author))
+		line := "  " + truncate(item.Title, width-4)
 		if i == m.searchCursor {
 			sb.WriteString(styleSidebarSelected.Width(width).Render(line) + "\n")
 		} else {
 			sb.WriteString(styleNormal.Render(line) + "\n")
 		}
 	}
-	sb.WriteString("\n")
-	sb.WriteString(styleMutedText.Render("  ↑↓ navigate · ←→ page · Enter detail · Esc back") + "\n")
-	return lipgloss.NewStyle().Width(width).Render(sb.String())
+	sb.WriteString("\n" + styleMutedText.Render("  ↑↓ navigate  ←→ page  / search  a add") + "\n")
+	return sb.String()
 }
 
-func renderSearchDetail(m Model, width, height int) string {
-	m2 := m.detailManga
+func renderSearchRight(m Model, width, height int) string {
+	if m.detailLoading {
+		return "\n  " + m.spinner.View() + " Loading...\n"
+	}
+	if m.detailManga.ID == "" {
+		return "\n" + styleMutedText.Render("  Select a result to see details")
+	}
+
+	d := m.detailManga
 	var sb strings.Builder
 	sb.WriteString("\n")
-	sb.WriteString(styleTitle.Render("  "+m2.Title) + "\n\n")
-	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Author:   %s", m2.Author)) + "\n")
-	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Genres:   %s", strings.Join(m2.Genres, ", "))) + "\n")
-	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Status:   %s", m2.Status)) + "\n")
-	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Chapters: %d", m2.TotalChapters)) + "\n")
-	if m2.CoverURL != "" {
-		sb.WriteString(styleMutedText.Render("  Cover:    "+m2.CoverURL) + "\n")
-	}
-	if m2.Description != "" {
-		sb.WriteString("\n" + styleNormal.Render("  "+truncate(m2.Description, width-4)) + "\n")
+	sb.WriteString(styleTitle.Render("  "+truncate(d.Title, width-4)) + "\n\n")
+	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Author:   %s", d.Author)) + "\n")
+	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Status:   %s", d.Status)) + "\n")
+	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Genres:   %s", strings.Join(d.Genres, ", "))) + "\n")
+	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Chapters: %d", d.TotalChapters)) + "\n")
+	if d.Description != "" {
+		sb.WriteString("\n" + styleNormal.Render("  "+truncate(d.Description, width-4)) + "\n")
 	}
 	sb.WriteString("\n")
 	if m.token != "" {
 		if m.detailEntry != nil {
-			sb.WriteString(styleNormal.Render(fmt.Sprintf(
-				"  [In library] ch.%d · %s", m.detailEntry.CurrentChapter, m.detailEntry.Status)) + "\n\n")
-			sb.WriteString(styleSidebarSelected.Render("  1. Quick +1 chapter") + "\n")
+			sb.WriteString(styleMutedText.Render(fmt.Sprintf(
+				"  In library: ch.%d · %s", m.detailEntry.CurrentChapter, m.detailEntry.Status)) + "\n")
+			sb.WriteString(styleNormal.Render("  [a] Update Progress") + "\n")
 		} else {
-			sb.WriteString(styleSidebarSelected.Render("  1. Add to library (reading, ch.0)") + "\n")
+			sb.WriteString(styleNormal.Render("  [a] Add to Library") + "\n")
 		}
+		sb.WriteString(styleNormal.Render("  [c] Join Chat") + "\n")
 	}
-	sb.WriteString("\n" + styleMutedText.Render("  Esc back to results") + "\n")
-	return lipgloss.NewStyle().Width(width).Render(sb.String())
+	return sb.String()
 }
 
 func truncate(s string, n int) string {

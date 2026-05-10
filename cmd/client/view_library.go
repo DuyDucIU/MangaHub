@@ -50,8 +50,9 @@ func updateLibrary(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.libraryCursor < len(m.libraryFlat) {
 				id := m.libraryFlat[m.libraryCursor].MangaID
 				m.currentView = viewSearch
-				m.searchFocusPane = searchPaneDetail
-				return m, cmdFetchDetail(m.baseURL, m.token, id)
+				m.detailPending = id
+				m.detailLoading = true
+				return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, id), m.spinner.Tick)
 			}
 		}
 	}
