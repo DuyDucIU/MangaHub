@@ -125,7 +125,7 @@ func renderLibraryRight(m Model, width, height int) string {
 	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Status:    %s",
 		strings.ReplaceAll(item.Status, "_", " "))) + "\n")
 	if item.UpdatedAt != "" {
-		sb.WriteString(styleMutedText.Render("  Updated:   "+item.UpdatedAt) + "\n")
+		sb.WriteString(styleMutedText.Render("  Updated:   "+friendlyTime(item.UpdatedAt)) + "\n")
 	}
 	sb.WriteString("\n")
 	sb.WriteString(styleNormal.Render("  [a] Update Progress") + "\n")

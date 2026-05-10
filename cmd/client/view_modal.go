@@ -268,9 +268,9 @@ func renderModal(m Model) string {
 	return ""
 }
 
-func modalBox(title, content string) string {
-	inner := lipgloss.NewStyle().Width(42).Padding(0, 1).Render(content)
-	return styleBorderBox.Width(44).Render(
+func modalBox(title, content string, innerW int) string {
+	inner := lipgloss.NewStyle().Width(innerW).Padding(0, 1).Render(content)
+	return styleBorderBox.Width(innerW + 2).Render(
 		styleTitle.Render("  "+title) + "\n\n" + inner,
 	)
 }
@@ -299,24 +299,24 @@ func renderModalHelp() string {
 		"  [Enter]   Send message",
 		"  [/exit]   Leave room",
 	}
-	return modalBox("Keybindings", strings.Join(lines, "\n"))
+	return modalBox("Keybindings", strings.Join(lines, "\n"), 42)
 }
 
 func renderModalNotifications(m Model) string {
 	if len(m.notifications) == 0 {
-		return modalBox("Notifications", styleMutedText.Render("No notifications yet."))
+		return modalBox("Notifications", styleMutedText.Render("No notifications yet."), 66)
 	}
 	var lines []string
 	for _, n := range m.notifications {
-		lines = append(lines, "• "+truncate(n, 38))
+		lines = append(lines, "• "+truncate(n, 62))
 	}
-	return modalBox("Notifications", strings.Join(lines, "\n"))
+	return modalBox("Notifications", strings.Join(lines, "\n"), 66)
 }
 
 func renderModalError(m Model) string {
 	content := styleError.Render(truncate(m.modalMessage, 40)) + "\n\n" +
 		styleMutedText.Render("Esc  Dismiss")
-	return modalBox("Error", content)
+	return modalBox("Error", content, 42)
 }
 
 func renderModalConfirm(m Model) string {
@@ -326,14 +326,14 @@ func renderModalConfirm(m Model) string {
 	}
 	content := fmt.Sprintf("Are you sure you want to %s?\n\n", action) +
 		styleMutedText.Render("[y] Yes    [n]/[Esc] No")
-	return modalBox("Confirm", content)
+	return modalBox("Confirm", content, 42)
 }
 
 func renderModalJoinChat(m Model) string {
 	content := styleMutedText.Render("Manga ID (blank = general):") + "\n" +
 		m.modalInput.View() + "\n\n" +
 		styleMutedText.Render("[Enter] Join    [Esc] Cancel")
-	return modalBox("Join Chat Room", content)
+	return modalBox("Join Chat Room", content, 42)
 }
 
 func renderModalUpdateProgress(m Model) string {
@@ -369,5 +369,5 @@ func renderModalUpdateProgress(m Model) string {
 		styleMutedText.Render("Status:") + "\n" +
 		strings.Join(statusLines, "\n") + "\n\n" +
 		styleMutedText.Render("[Tab] Switch    [Enter] Save    [Esc] Cancel")
-	return modalBox(title, content)
+	return modalBox(title, content, 42)
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -151,6 +152,23 @@ var (
 )
 
 const sidebarWidth = 22
+
+var mangaHubArt = [6]string{
+	`███╗   ███╗ █████╗ ███╗   ██╗ ██████╗  █████╗ ██╗  ██╗██╗   ██╗██████╗ `,
+	`████╗ ████║██╔══██╗████╗  ██║██╔════╝ ██╔══██╗██║  ██║██║   ██║██╔══██╗`,
+	`██╔████╔██║███████║██╔██╗ ██║██║  ███╗███████║███████║██║   ██║██████╔╝ `,
+	`██║╚██╔╝██║██╔══██║██║╚██╗██║██║   ██║██╔══██║██╔══██║██║   ██║██╔══██╗`,
+	`██║ ╚═╝ ██║██║  ██║██║ ╚████║╚██████╔╝██║  ██║██║  ██║╚██████╔╝██████╔╝`,
+	`╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝`,
+}
+
+func padVisual(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-w)
+}
 
 // --- Model ---
 
@@ -413,39 +431,106 @@ func (m Model) View() string {
 	return renderLayout(m)
 }
 
-// renderLayout composes header + (sidebar | content) + footer.
+// renderLayout draws the full framed layout using box-drawing characters.
 func renderLayout(m Model) string {
-	bodyHeight := m.height - 2 // 1 header + 1 footer
-	contentWidth := m.width - sidebarWidth - 1 // -1 for left border of content
+	if m.width < 40 || m.height < 12 {
+		return ""
+	}
 
-	header := renderHeader(m)
-	sidebar := lipgloss.NewStyle().
-		Width(sidebarWidth).
-		Height(bodyHeight).
-		Render(renderSidebar(m, sidebarWidth, bodyHeight))
-	content := lipgloss.NewStyle().
-		Width(contentWidth).
-		Height(bodyHeight).
-		BorderLeft(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		Render(renderContent(m, contentWidth-2, bodyHeight-1))
-	footer := renderFooter(m)
+	innerW := m.width - 2
+	sidebarW := sidebarWidth
+	contentW := innerW - sidebarW - 1
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, content)
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	headerLines := buildHeaderLines(m, innerW)
+	headerH := len(headerLines)
+	footerLines := buildFooterLines(m, innerW)
+	footerH := len(footerLines)
+
+	bodyH := m.height - headerH - footerH - 4 // top + h-b sep + b-f sep + bottom
+	if bodyH < 1 {
+		bodyH = 1
+	}
+
+	sidebarBlock := lipgloss.NewStyle().Width(sidebarW).Height(bodyH).Render(
+		renderSidebar(m, sidebarW, bodyH))
+	contentBlock := lipgloss.NewStyle().Width(contentW).Height(bodyH).Render(
+		renderContent(m, contentW-2, bodyH-1))
+
+	splitLines := func(s string, w, count int) []string {
+		lines := strings.Split(s, "\n")
+		for len(lines) < count {
+			lines = append(lines, strings.Repeat(" ", w))
+		}
+		return lines[:count]
+	}
+	sidebarLines := splitLines(sidebarBlock, sidebarW, bodyH)
+	contentLines := splitLines(contentBlock, contentW, bodyH)
+
+	var sb strings.Builder
+
+	sb.WriteString("┌" + strings.Repeat("─", innerW) + "┐\n")
+
+	for _, line := range headerLines {
+		sb.WriteString("│" + padVisual(line, innerW) + "│\n")
+	}
+
+	sb.WriteString("├" + strings.Repeat("─", sidebarW) + "┬" + strings.Repeat("─", contentW) + "┤\n")
+
+	for i := 0; i < bodyH; i++ {
+		sb.WriteString("│" + sidebarLines[i] + "│" + contentLines[i] + "│\n")
+	}
+
+	sb.WriteString("├" + strings.Repeat("─", sidebarW) + "┴" + strings.Repeat("─", contentW) + "┤\n")
+
+	for _, line := range footerLines {
+		sb.WriteString("│" + padVisual(line, innerW) + "│\n")
+	}
+
+	sb.WriteString("└" + strings.Repeat("─", innerW) + "┘")
+
+	return sb.String()
 }
 
-func renderHeader(m Model) string {
-	left := "  MangaHub"
-	right := ""
-	if m.username != "" {
-		right = m.username + "  "
+func buildHeaderLines(m Model, innerW int) []string {
+	timeStr := time.Now().Format("3:04 PM")
+	lines := make([]string, 0, len(mangaHubArt)+1)
+	lines = append(lines, "") // blank top padding
+
+	for i, art := range mangaHubArt {
+		var right string
+		switch i {
+		case 2:
+			if m.username != "" {
+				right = "  user: " + m.username + "  "
+			}
+		case 3:
+			right = "  [" + timeStr + "]  "
+		}
+		artW := lipgloss.Width(art)
+		rightW := lipgloss.Width(right)
+		gap := innerW - artW - rightW
+		if gap < 2 {
+			// terminal too narrow to show right info — omit it
+			right = ""
+			gap = innerW - artW
+			if gap < 0 {
+				gap = 0
+			}
+		}
+		lines = append(lines, art+strings.Repeat(" ", gap)+right)
 	}
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 0 {
-		gap = 0
+	return lines
+}
+
+func buildFooterLines(m Model, innerW int) []string {
+	keys := "  [?] Help   [n] Notif   [q] Quit"
+	if len(m.notifications) > 0 {
+		notif := "   •  " + m.notifications[0]
+		if lipgloss.Width(keys)+lipgloss.Width(notif) <= innerW {
+			keys += notif
+		}
 	}
-	return styleHeader.Width(m.width).Render(left + strings.Repeat(" ", gap) + right)
+	return []string{padVisual(keys, innerW)}
 }
 
 const maxNotifications = 20
@@ -456,14 +541,6 @@ func pushNotif(notifs []string, text string) []string {
 		n = n[:maxNotifications]
 	}
 	return n
-}
-
-func renderFooter(m Model) string {
-	text := ""
-	if len(m.notifications) > 0 {
-		text = "  " + m.notifications[0]
-	}
-	return styleNotif.Width(m.width).Render(text)
 }
 
 // renderContent dispatches to the active view's render function.

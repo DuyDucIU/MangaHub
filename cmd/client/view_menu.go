@@ -11,9 +11,9 @@ import (
 
 func sidebarItems(m Model) []string {
 	if m.token == "" {
-		return []string{"Search", "Register", "Login"}
+		return []string{"Home", "Search", "Register", "Login"}
 	}
-	return []string{"Search", "Library", "Chat", "Logout"}
+	return []string{"Home", "Search", "Library", "Chat", "Logout"}
 }
 
 func updateMenu(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -42,6 +42,8 @@ func activateSidebarItem(m Model) (Model, tea.Cmd) {
 		return m, nil
 	}
 	switch items[m.sidebarIdx] {
+	case "Home":
+		m.currentView = viewMenu
 	case "Search":
 		m.currentView = viewSearch
 		m.searchInputs = initSearchInputs()
@@ -128,13 +130,20 @@ func renderDashboard(m Model, width int) string {
 	} else {
 		for _, item := range m.dashboardReading {
 			chap := fmt.Sprintf("ch.%d", item.CurrentChapter)
-			title := truncate(item.Title, width-10-len(chap))
-			gap := width - 4 - lipgloss.Width(title) - lipgloss.Width(chap)
-			if gap < 1 {
-				gap = 1
+			ago := friendlyTime(item.UpdatedAt)
+			inner := width - 2 // after leading "  "
+			col1 := inner * 50 / 100
+			col2 := inner * 22 / 100
+			col3 := inner - col1 - col2
+			title := truncate(item.Title, col1)
+			agoW := lipgloss.Width(ago)
+			agoGap := col3 - agoW
+			if agoGap < 0 {
+				agoGap = 0
 			}
-			sb.WriteString(styleNormal.Render(
-				"  "+title+strings.Repeat(" ", gap)+chap) + "\n")
+			line := "  " + padVisual(title, col1) + padVisual(chap, col2) +
+				strings.Repeat(" ", agoGap) + ago
+			sb.WriteString(styleNormal.Render(line) + "\n")
 		}
 	}
 	sb.WriteString("\n")

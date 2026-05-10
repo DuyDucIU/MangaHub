@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -395,4 +396,41 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return string(runes[:n-1]) + "…"
+}
+
+func friendlyTime(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	var t time.Time
+	var err error
+	for _, f := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02"} {
+		t, err = time.Parse(f, raw)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return raw
+	}
+	diff := time.Since(t)
+	switch {
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		return fmt.Sprintf("%dm ago", int(diff.Minutes()))
+	case diff < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(diff.Hours()))
+	case diff < 2*24*time.Hour:
+		return "yesterday"
+	case diff < 7*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(diff.Hours()/24))
+	case diff < 30*24*time.Hour:
+		return fmt.Sprintf("%dw ago", int(diff.Hours()/24/7))
+	default:
+		if t.Year() == time.Now().Year() {
+			return t.Format("Jan 2")
+		}
+		return t.Format("Jan 2, 2006")
+	}
 }
