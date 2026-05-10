@@ -46,13 +46,15 @@ func updateLibrary(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.libraryCursor < len(m.libraryFlat)-1 {
 				m.libraryCursor++
 			}
-		case "enter":
+		case "a":
 			if m.libraryCursor < len(m.libraryFlat) {
-				id := m.libraryFlat[m.libraryCursor].MangaID
-				m.currentView = viewSearch
-				m.detailPending = id
-				m.detailLoading = true
-				return m, tea.Batch(cmdFetchDetail(m.baseURL, m.token, id), m.spinner.Tick)
+				item := m.libraryFlat[m.libraryCursor]
+				m = openModalUpdateProgress(m, false, item.CurrentChapter, item.Status)
+			}
+		case "d":
+			if m.libraryCursor < len(m.libraryFlat) {
+				item := m.libraryFlat[m.libraryCursor]
+				m = openModalConfirm(m, confirmRemoveManga, item.MangaID)
 			}
 		}
 	}
@@ -60,19 +62,36 @@ func updateLibrary(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func renderLibrary(m Model, width, height int) string {
+	leftWidth := width * 38 / 100
+	rightWidth := width - leftWidth - 1
+
+	left := lipgloss.NewStyle().Width(leftWidth).Height(height).Render(
+		renderLibraryLeft(m, leftWidth, height),
+	)
+	divider := lipgloss.NewStyle().
+		Width(1).Height(height).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(colorMuted).
+		Render("")
+	right := lipgloss.NewStyle().Width(rightWidth).Height(height).Render(
+		renderLibraryRight(m, rightWidth, height),
+	)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
+}
+
+func renderLibraryLeft(m Model, width, height int) string {
+	if m.libraryLoading {
+		return "\n  " + m.spinner.View() + " Loading library...\n"
+	}
 	if m.libraryFlat == nil {
-		return lipgloss.NewStyle().Width(width).Render(
-			"\n" + styleMutedText.Render("  Loading library..."))
+		return "\n" + styleMutedText.Render("  Loading library...")
 	}
 	if len(m.libraryFlat) == 0 {
-		return lipgloss.NewStyle().Width(width).Render(
-			"\n" + styleNormal.Render("  Your library is empty. Add manga via Search."))
+		return "\n" + styleNormal.Render("  Your library is empty.\n  Search for manga to add.")
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("\n  %s (%d total)\n",
-		styleTitle.Render("My Library"), len(m.libraryFlat)))
-
 	flatIdx := 0
 	for _, status := range libraryStatusOrder {
 		items := m.libraryGroups[status]
@@ -80,9 +99,10 @@ func renderLibrary(m Model, width, height int) string {
 			continue
 		}
 		label := strings.ToUpper(strings.ReplaceAll(status, "_", " "))
-		sb.WriteString("\n  " + styleMutedText.Render("["+label+"]") + "\n")
+		sb.WriteString("\n  " + styleMutedText.Render(
+			fmt.Sprintf("%s (%d)", label, len(items))) + "\n")
 		for _, item := range items {
-			line := fmt.Sprintf("  %-30s  ch.%-4d", truncate(item.Title, 30), item.CurrentChapter)
+			line := "  " + truncate(item.Title, width-4)
 			if flatIdx == m.libraryCursor {
 				sb.WriteString(styleSidebarSelected.Width(width).Render(line) + "\n")
 			} else {
@@ -91,6 +111,26 @@ func renderLibrary(m Model, width, height int) string {
 			flatIdx++
 		}
 	}
-	sb.WriteString("\n" + styleMutedText.Render("  ↑↓ navigate · Enter view detail · Esc back") + "\n")
-	return lipgloss.NewStyle().Width(width).Render(sb.String())
+	sb.WriteString("\n" + styleMutedText.Render("  ↑↓ navigate  a update  d remove") + "\n")
+	return sb.String()
+}
+
+func renderLibraryRight(m Model, width, height int) string {
+	if len(m.libraryFlat) == 0 || m.libraryCursor >= len(m.libraryFlat) {
+		return "\n" + styleMutedText.Render("  Select an item to see details")
+	}
+	item := m.libraryFlat[m.libraryCursor]
+	var sb strings.Builder
+	sb.WriteString("\n")
+	sb.WriteString(styleTitle.Render("  "+truncate(item.Title, width-4)) + "\n\n")
+	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Progress:  ch.%d", item.CurrentChapter)) + "\n")
+	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Status:    %s",
+		strings.ReplaceAll(item.Status, "_", " "))) + "\n")
+	if item.UpdatedAt != "" {
+		sb.WriteString(styleMutedText.Render("  Updated:   "+item.UpdatedAt) + "\n")
+	}
+	sb.WriteString("\n")
+	sb.WriteString(styleNormal.Render("  [a] Update Progress") + "\n")
+	sb.WriteString(styleNormal.Render("  [d] Remove from Library") + "\n")
+	return sb.String()
 }
