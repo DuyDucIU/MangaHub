@@ -244,6 +244,9 @@ func updateSearchKeys(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 			status := strings.TrimSpace(m.searchInputs[2].Value())
 			m.searchPage = 1
 			m.searchLoading = true
+			m.detailManga = mangaItem{}
+			m.detailEntry = nil
+			m.detailPending = ""
 			return m, tea.Batch(cmdSearch(m.baseURL, m.token, q, genre, status, 1), m.spinner.Tick)
 		default:
 			var cmd tea.Cmd
