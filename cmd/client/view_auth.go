@@ -119,6 +119,7 @@ func updateAuth(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(
 			cmdConnectTCP(tcpAddr, m.token),
 			cmdConnectUDP(udpAddr),
+			cmdFetchLibrary(m.baseURL, m.token),
 		)
 
 	case registerSuccessMsg:

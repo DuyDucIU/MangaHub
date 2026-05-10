@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -96,14 +97,59 @@ func renderSidebar(m Model, width, height int) string {
 }
 
 func renderMenu(m Model, width, height int) string {
+	if m.token == "" {
+		return renderMenuGuest(width)
+	}
+	return renderDashboard(m, width)
+}
+
+func renderMenuGuest(width int) string {
 	var sb strings.Builder
 	sb.WriteString("\n")
 	sb.WriteString(styleTitle.Render("  Welcome to MangaHub") + "\n\n")
-	sb.WriteString(styleMutedText.Render("  Server: "+m.baseURL) + "\n\n")
-	if m.token == "" {
-		sb.WriteString(styleNormal.Render("  Select an option from the menu.") + "\n")
+	sb.WriteString(styleNormal.Render("  Select an option from the menu.") + "\n\n")
+	sb.WriteString(styleMutedText.Render("  Search manga · Register · Login") + "\n")
+	return lipgloss.NewStyle().Width(width).Render(sb.String())
+}
+
+func renderDashboard(m Model, width int) string {
+	var sb strings.Builder
+	sb.WriteString("\n")
+	sb.WriteString(styleTitle.Render("  Welcome back, "+m.username) + "\n\n")
+
+	// Continue Reading
+	sb.WriteString(styleNormal.Render("  Continue Reading") + "\n")
+	sb.WriteString(styleMutedText.Render("  "+strings.Repeat("─", width-4)) + "\n")
+	if len(m.dashboardReading) == 0 {
+		sb.WriteString(styleMutedText.Render("  No manga in reading list.") + "\n")
 	} else {
-		sb.WriteString(styleNormal.Render("  Logged in as: "+m.username) + "\n")
+		for _, item := range m.dashboardReading {
+			chap := fmt.Sprintf("ch.%d", item.CurrentChapter)
+			title := truncate(item.Title, width-10-len(chap))
+			gap := width - 4 - lipgloss.Width(title) - lipgloss.Width(chap)
+			if gap < 1 {
+				gap = 1
+			}
+			sb.WriteString(styleNormal.Render(
+				"  "+title+strings.Repeat(" ", gap)+chap) + "\n")
+		}
 	}
+	sb.WriteString("\n")
+
+	// Recent Notifications
+	sb.WriteString(styleNormal.Render("  Recent Notifications") + "\n")
+	sb.WriteString(styleMutedText.Render("  "+strings.Repeat("─", width-4)) + "\n")
+	notifs := m.notifications
+	if len(notifs) > 5 {
+		notifs = notifs[:5]
+	}
+	if len(notifs) == 0 {
+		sb.WriteString(styleMutedText.Render("  No notifications yet. Press n for history.") + "\n")
+	} else {
+		for _, n := range notifs {
+			sb.WriteString(styleNotif.Render("  • "+truncate(n, width-6)) + "\n")
+		}
+	}
+
 	return lipgloss.NewStyle().Width(width).Render(sb.String())
 }
