@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -113,7 +114,7 @@ type loginSuccessMsg struct {
 	username string
 }
 type registerSuccessMsg struct{}
-type addLibraryMsg     struct{ err string }
+type addLibraryMsg     struct{ err, title string }
 type updateProgressMsg struct{ err string }
 type removeLibraryMsg  struct{ err string }
 type errMsg            struct{ text string }
@@ -349,6 +350,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notifications = pushNotif(m.notifications, "Add failed: "+msg.err)
 			return m, nil
 		}
+		m.notifications = pushNotif(m.notifications, fmt.Sprintf("Added %q to library.", msg.title))
 		if m.currentView == viewSearch && m.detailManga.ID != "" {
 			m.detailPending = m.detailManga.ID
 			m.detailLoading = true

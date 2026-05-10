@@ -129,7 +129,7 @@ func renderDashboard(m Model, width int) string {
 		sb.WriteString(styleMutedText.Render("  No manga in reading list.") + "\n")
 	} else {
 		for _, item := range m.dashboardReading {
-			chap := fmt.Sprintf("ch.%d", item.CurrentChapter)
+			chap := fmt.Sprintf("Ch.%d", item.CurrentChapter)
 			ago := friendlyTime(item.UpdatedAt)
 			inner := width - 2 // after leading "  "
 			col1 := inner * 50 / 100

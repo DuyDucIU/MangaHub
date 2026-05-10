@@ -10,10 +10,11 @@ import (
 )
 
 type tcpServerMsg struct {
-	Type    string `json:"type"`
-	MangaID string `json:"manga_id"`
-	Chapter int    `json:"chapter"`
-	Message string `json:"message"`
+	Type       string `json:"type"`
+	MangaID    string `json:"manga_id"`
+	MangaTitle string `json:"manga_title"`
+	Chapter    int    `json:"chapter"`
+	Message    string `json:"message"`
 }
 
 // cmdConnectTCP dials the TCP server, sends the auth message, and returns
@@ -49,7 +50,11 @@ func waitForTCP(conn net.Conn) tea.Cmd {
 		case "auth_ok":
 			return tcpNotifMsg{text: ""}
 		case "progress_update":
-			return tcpNotifMsg{text: fmt.Sprintf("Progress updated: %s → chapter %d", msg.MangaID, msg.Chapter)}
+			name := msg.MangaTitle
+			if name == "" {
+				name = msg.MangaID
+			}
+			return tcpNotifMsg{text: fmt.Sprintf("Progress updated: %s → Chapter %d", name, msg.Chapter)}
 		case "error":
 			return tcpNotifMsg{text: "TCP: " + msg.Message}
 		default:

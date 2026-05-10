@@ -208,7 +208,7 @@ func submitModalProgress(m Model) (Model, tea.Cmd) {
 	status := modalStatusOptions[m.modalCursor]
 	m.activeModal = modalNone
 	if m.modalIsAdding {
-		return m, cmdAddToLibrary(m.baseURL, m.token, m.detailManga.ID, status, chapter)
+		return m, cmdAddToLibrary(m.baseURL, m.token, m.detailManga.ID, m.detailManga.Title, status, chapter)
 	}
 	mangaID := m.detailManga.ID
 	if m.currentView == viewLibrary && len(m.libraryFlat) > m.libraryCursor {
@@ -350,7 +350,7 @@ func renderModalUpdateProgress(m Model) string {
 
 	var statusLines []string
 	for i, s := range modalStatusOptions {
-		label := strings.ReplaceAll(s, "_", " ")
+		label := capitalizeFirst(strings.ReplaceAll(s, "_", " "))
 		switch {
 		case i == m.modalCursor && !m.modalInputFocused:
 			statusLines = append(statusLines, styleSidebarSelected.Render("> "+label))
@@ -369,5 +369,5 @@ func renderModalUpdateProgress(m Model) string {
 		styleMutedText.Render("Status:") + "\n" +
 		strings.Join(statusLines, "\n") + "\n\n" +
 		styleMutedText.Render("[Tab] Switch    [Enter] Save    [Esc] Cancel")
-	return modalBox(title, content, 42)
+	return modalBox(title, content, 48)
 }

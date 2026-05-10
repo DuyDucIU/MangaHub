@@ -123,7 +123,7 @@ func fetchLibraryEntry(baseURL, token, mangaID string) *libraryItem {
 	return nil
 }
 
-func cmdAddToLibrary(baseURL, token, mangaID, status string, chapter int) tea.Cmd {
+func cmdAddToLibrary(baseURL, token, mangaID, title, status string, chapter int) tea.Cmd {
 	return func() tea.Msg {
 		var resp apiError
 		code, err := postJSON(baseURL+"/users/library", token, map[string]interface{}{
@@ -137,7 +137,7 @@ func cmdAddToLibrary(baseURL, token, mangaID, status string, chapter int) tea.Cm
 		if code != 201 {
 			return addLibraryMsg{err: resp.Error}
 		}
-		return addLibraryMsg{}
+		return addLibraryMsg{title: title}
 	}
 }
 
@@ -380,7 +380,7 @@ func renderSearchRight(m Model, width, height int) string {
 	if m.token != "" {
 		if m.detailEntry != nil {
 			sb.WriteString(styleMutedText.Render(fmt.Sprintf(
-				"  In library: ch.%d · %s", m.detailEntry.CurrentChapter, m.detailEntry.Status)) + "\n")
+				"  In library: Ch.%d · %s", m.detailEntry.CurrentChapter, capitalizeFirst(strings.ReplaceAll(m.detailEntry.Status, "_", " ")))) + "\n")
 			sb.WriteString(styleNormal.Render("  [a] Update Progress") + "\n")
 		} else {
 			sb.WriteString(styleNormal.Render("  [a] Add to Library") + "\n")
@@ -388,6 +388,13 @@ func renderSearchRight(m Model, width, height int) string {
 		sb.WriteString(styleNormal.Render("  [c] Join Chat") + "\n")
 	}
 	return sb.String()
+}
+
+func capitalizeFirst(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func truncate(s string, n int) string {

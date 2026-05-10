@@ -121,9 +121,9 @@ func renderLibraryRight(m Model, width, height int) string {
 	var sb strings.Builder
 	sb.WriteString("\n")
 	sb.WriteString(styleTitle.Render("  "+truncate(item.Title, width-4)) + "\n\n")
-	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Progress:  ch.%d", item.CurrentChapter)) + "\n")
+	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Progress:  Ch.%d", item.CurrentChapter)) + "\n")
 	sb.WriteString(styleNormal.Render(fmt.Sprintf("  Status:    %s",
-		strings.ReplaceAll(item.Status, "_", " "))) + "\n")
+		capitalizeFirst(strings.ReplaceAll(item.Status, "_", " ")))) + "\n")
 	if item.UpdatedAt != "" {
 		sb.WriteString(styleMutedText.Render("  Updated:   "+friendlyTime(item.UpdatedAt)) + "\n")
 	}

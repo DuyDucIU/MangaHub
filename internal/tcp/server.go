@@ -14,10 +14,11 @@ import (
 
 // ProgressUpdate is the message sent to TCP clients when a user's reading progress changes.
 type ProgressUpdate struct {
-	UserID    string `json:"user_id"`
-	MangaID   string `json:"manga_id"`
-	Chapter   int    `json:"chapter"`
-	Timestamp int64  `json:"timestamp"`
+	UserID     string `json:"user_id"`
+	MangaID    string `json:"manga_id"`
+	MangaTitle string `json:"manga_title"`
+	Chapter    int    `json:"chapter"`
+	Timestamp  int64  `json:"timestamp"`
 }
 
 // ProgressSyncServer manages persistent TCP client connections and broadcasts progress updates.
@@ -84,11 +85,12 @@ func (s *ProgressSyncServer) BroadcastToUser(update ProgressUpdate) {
 		return
 	}
 	msg := serverMsg{
-		Type:      "progress_update",
-		UserID:    update.UserID,
-		MangaID:   update.MangaID,
-		Chapter:   update.Chapter,
-		Timestamp: update.Timestamp,
+		Type:       "progress_update",
+		UserID:     update.UserID,
+		MangaID:    update.MangaID,
+		MangaTitle: update.MangaTitle,
+		Chapter:    update.Chapter,
+		Timestamp:  update.Timestamp,
 	}
 	if err := writeMsg(conn, msg); err != nil {
 		log.Printf("tcp: write failed for user %s: %v", update.UserID, err)
@@ -198,12 +200,13 @@ type authMsg struct {
 }
 
 type serverMsg struct {
-	Type      string `json:"type"`
-	UserID    string `json:"user_id,omitempty"`
-	MangaID   string `json:"manga_id,omitempty"`
-	Chapter   int    `json:"chapter"`
-	Timestamp int64  `json:"timestamp,omitempty"`
-	Message   string `json:"message,omitempty"`
+	Type       string `json:"type"`
+	UserID     string `json:"user_id,omitempty"`
+	MangaID    string `json:"manga_id,omitempty"`
+	MangaTitle string `json:"manga_title,omitempty"`
+	Chapter    int    `json:"chapter"`
+	Timestamp  int64  `json:"timestamp,omitempty"`
+	Message    string `json:"message,omitempty"`
 }
 
 func writeMsg(conn net.Conn, msg serverMsg) error {
