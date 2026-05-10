@@ -76,3 +76,23 @@ func TestFlattenLibrary(t *testing.T) {
 	assert.Equal(t, "a", flat[0].MangaID)
 	assert.Equal(t, "b", flat[1].MangaID)
 }
+
+func TestLibraryLoadingSetOnSidebarNavigation(t *testing.T) {
+	m := New("http://localhost:8080")
+	m.token = "tok"
+	m.username = "alice"
+	m.width, m.height = 120, 40
+
+	items := sidebarItems(m)
+	for i, item := range items {
+		if item == "Library" {
+			m.sidebarIdx = i
+			break
+		}
+	}
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m2 := next.(Model)
+	assert.Equal(t, viewLibrary, m2.currentView)
+	assert.True(t, m2.libraryLoading)
+	assert.NotNil(t, cmd)
+}

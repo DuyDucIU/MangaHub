@@ -62,7 +62,8 @@ func activateSidebarItem(m Model) (Model, tea.Cmd) {
 	case "Library":
 		m.currentView = viewLibrary
 		m.libraryCursor = 0
-		return m, cmdFetchLibrary(m.baseURL, m.token)
+		m.libraryLoading = true
+		return m, tea.Batch(cmdFetchLibrary(m.baseURL, m.token), m.spinner.Tick)
 	case "Chat":
 		m.currentView = viewChat
 		m.chatPrompting = true
