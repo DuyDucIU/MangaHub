@@ -244,6 +244,8 @@ func updateSearchKeys(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 			status := strings.TrimSpace(m.searchInputs[2].Value())
 			m.searchPage = 1
 			m.searchLoading = true
+			m.searchPerformed = true
+			m.searchLastQuery = q
 			m.detailManga = mangaItem{}
 			m.detailEntry = nil
 			m.detailPending = ""
@@ -345,7 +347,15 @@ func renderSearchLeft(m Model, width, height int) string {
 		return sb.String()
 	}
 	if len(m.searchResults) == 0 {
-		sb.WriteString("\n" + styleMutedText.Render("  Search for manga using /") + "\n")
+		if m.searchPerformed {
+			label := "  No results found"
+			if m.searchLastQuery != "" {
+				label = fmt.Sprintf("  No results found for %q", m.searchLastQuery)
+			}
+			sb.WriteString("\n" + styleMutedText.Render(label) + "\n")
+		} else {
+			sb.WriteString("\n" + styleMutedText.Render("  Search for manga using /") + "\n")
+		}
 		return sb.String()
 	}
 

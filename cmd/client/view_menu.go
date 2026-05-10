@@ -46,9 +46,16 @@ func activateSidebarItem(m Model) (Model, tea.Cmd) {
 		m.currentView = viewSearch
 		m.searchInputs = initSearchInputs()
 		m.searchFocus = 0
+		m.searchInputFocused = true
 		m.searchResults = nil
 		m.searchPage = 1
 		m.searchTotal = 0
+		m.searchPerformed = false
+		m.searchLastQuery = ""
+		m.detailManga = mangaItem{}
+		m.detailEntry = nil
+		m.detailPending = ""
+		return m, textinput.Blink
 	case "Register":
 		m.currentView = viewRegister
 		m.authInputs = initRegisterInputs()

@@ -182,6 +182,8 @@ type Model struct {
 
 	// search view (searchState enum removed)
 	searchInputFocused bool
+	searchPerformed    bool
+	searchLastQuery    string
 	detailPending      string
 	searchInputs       []textinput.Model
 	searchFocus        int
