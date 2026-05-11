@@ -10,7 +10,7 @@ import (
 func TestSidebarItemsGuest(t *testing.T) {
 	m := New("http://localhost:8080")
 	items := sidebarItems(m)
-	assert.Equal(t, []string{"Search", "Register", "Login"}, items)
+	assert.Equal(t, []string{"Home", "Search", "Register", "Login"}, items)
 }
 
 func TestSidebarItemsAuth(t *testing.T) {
@@ -18,7 +18,7 @@ func TestSidebarItemsAuth(t *testing.T) {
 	m.token = "tok"
 	m.username = "alice"
 	items := sidebarItems(m)
-	assert.Equal(t, []string{"Search", "Library", "Chat", "Logout"}, items)
+	assert.Equal(t, []string{"Home", "Search", "Library", "Chat", "Logout"}, items)
 }
 
 func TestMenuNavDown(t *testing.T) {
@@ -32,7 +32,7 @@ func TestMenuNavDown(t *testing.T) {
 func TestMenuNavSelectSearch(t *testing.T) {
 	m := New("http://localhost:8080")
 	m.width, m.height = 100, 40
-	m.sidebarIdx = 0 // Search
+	m.sidebarIdx = 1 // Search (0=Home, 1=Search)
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m2 := next.(Model)
 	assert.Equal(t, viewSearch, m2.currentView)
@@ -41,8 +41,8 @@ func TestMenuNavSelectSearch(t *testing.T) {
 func TestMenuSelectLoginSetsInputs(t *testing.T) {
 	m := New("http://localhost:8080")
 	m.width, m.height = 100, 40
-	// guest sidebar: 0=Search,1=Register,2=Login
-	m.sidebarIdx = 2
+	// guest sidebar: 0=Home, 1=Search, 2=Register, 3=Login
+	m.sidebarIdx = 3
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m2 := next.(Model)
 	assert.Equal(t, viewLogin, m2.currentView)

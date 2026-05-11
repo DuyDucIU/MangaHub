@@ -54,11 +54,14 @@ func (s *ProgressSyncServer) Register(userID string, conn net.Conn) {
 	s.Connections[userID] = conn
 }
 
-// Unregister removes the connection for userID.
-func (s *ProgressSyncServer) Unregister(userID string) {
+// Unregister removes the connection for userID only if it is still the same conn.
+// This prevents a reconnecting user's old goroutine from evicting the new registration.
+func (s *ProgressSyncServer) Unregister(userID string, conn net.Conn) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.Connections, userID)
+	if c, ok := s.Connections[userID]; ok && c == conn {
+		delete(s.Connections, userID)
+	}
 }
 
 // connFor returns the connection registered for userID, or nil if not connected.
@@ -184,7 +187,7 @@ func (s *ProgressSyncServer) handleConn(conn net.Conn) {
 	userID := claims.UserID
 
 	s.Register(userID, conn)
-	defer s.Unregister(userID)
+	defer s.Unregister(userID, conn)
 
 	writeMsg(conn, serverMsg{Type: "auth_ok", UserID: userID}) //nolint:errcheck
 

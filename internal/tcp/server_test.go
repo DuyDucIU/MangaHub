@@ -60,15 +60,18 @@ func TestUnregister(t *testing.T) {
 	defer c.Close()
 
 	srv.Register("user1", s)
-	srv.Unregister("user1")
+	srv.Unregister("user1", s)
 
 	assert.Equal(t, 0, srv.count())
 }
 
 func TestUnregister_NoOp(t *testing.T) {
 	srv := New("9090")
-	// should not panic
-	srv.Unregister("nobody")
+	s2, c2 := net.Pipe()
+	defer s2.Close()
+	defer c2.Close()
+	// should not panic on unknown user
+	srv.Unregister("nobody", s2)
 }
 
 func TestBroadcastToUser(t *testing.T) {
