@@ -8,6 +8,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const chatMaxMsgLen = 512
+
 type wsInMsg struct {
 	Type      string `json:"type"`
 	UserID    string `json:"user_id"`
@@ -54,6 +56,8 @@ func waitForWS(conn *websocket.Conn) tea.Cmd {
 			return wsJoined{username: msg.Username}
 		case "leave":
 			return wsLeft{username: msg.Username}
+		case "error":
+			return wsErrMsg{text: msg.Message}
 		default:
 			return wsMsgReceived{}
 		}
@@ -70,6 +74,6 @@ func cmdSendWSMessage(conn *websocket.Conn, text string) tea.Cmd {
 		if err != nil {
 			return errMsg{text: "Send failed: " + err.Error()}
 		}
-		return waitForWS(conn)
+		return nil
 	}
 }

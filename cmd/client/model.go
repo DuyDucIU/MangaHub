@@ -91,8 +91,9 @@ type wsMsgReceived struct {
 	username string
 	text     string
 }
-type wsJoined struct{ username string }
-type wsLeft   struct{ username string }
+type wsJoined  struct{ username string }
+type wsLeft    struct{ username string }
+type wsErrMsg  struct{ text string }
 
 type searchResultMsg struct {
 	results []mangaItem

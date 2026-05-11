@@ -13,9 +13,10 @@ import (
 
 func newChatInput() textinput.Model {
 	inp := textinput.New()
-	inp.Placeholder = "type a message... (/exit to leave)"
+	inp.Placeholder = "type a message... (/exit to leave, max 512 chars)"
 	inp.Focus()
 	inp.Width = 80
+	inp.CharLimit = chatMaxMsgLen
 	return inp
 }
 
@@ -80,6 +81,17 @@ func updateChat(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case wsLeft:
 		m.chatMessages = append(m.chatMessages, chatMessage{
 			text:     msg.username + " left the room",
+			isSystem: true,
+		})
+		m.chatViewport.SetContent(renderMessages(m))
+		if m.chatConn != nil {
+			return m, waitForWS(m.chatConn)
+		}
+		return m, nil
+
+	case wsErrMsg:
+		m.chatMessages = append(m.chatMessages, chatMessage{
+			text:     msg.text,
 			isSystem: true,
 		})
 		m.chatViewport.SetContent(renderMessages(m))
