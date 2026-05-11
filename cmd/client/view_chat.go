@@ -13,7 +13,7 @@ import (
 
 func newChatInput() textinput.Model {
 	inp := textinput.New()
-	inp.Placeholder = "type a message... (/exit to leave, max 512 chars)"
+	inp.Placeholder = "type a message..."
 	inp.Focus()
 	inp.Width = 80
 	inp.CharLimit = chatMaxMsgLen
