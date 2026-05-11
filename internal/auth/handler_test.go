@@ -103,6 +103,52 @@ func TestLogin_UserNotFound(t *testing.T) {
 	}
 }
 
+func TestRegister_DBError_Returns500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := database.Connect(":memory:")
+	if err != nil {
+		t.Fatalf("db: %v", err)
+	}
+	db.Close() // simulate unavailable DB
+
+	h := &auth.Handler{DB: db, JWTSecret: "test-secret"}
+	r := gin.New()
+	r.POST("/auth/register", h.Register)
+
+	w := postJSON(r, "/auth/register", `{"username":"testuser","email":"test@test.com","password":"password123"}`)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] != "internal error" {
+		t.Errorf("expected 'internal error', got %q", resp["error"])
+	}
+}
+
+func TestLogin_DBError_Returns500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := database.Connect(":memory:")
+	if err != nil {
+		t.Fatalf("db: %v", err)
+	}
+	db.Close() // simulate unavailable DB
+
+	h := &auth.Handler{DB: db, JWTSecret: "test-secret"}
+	r := gin.New()
+	r.POST("/auth/login", h.Login)
+
+	w := postJSON(r, "/auth/login", `{"username":"testuser","password":"password123"}`)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] != "internal error" {
+		t.Errorf("expected 'internal error', got %q", resp["error"])
+	}
+}
+
 func TestJWTMiddleware_MissingToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, err := database.Connect(":memory:")

@@ -84,7 +84,8 @@ type udpNotifMsg        struct{ text string }
 type udpReregisteredMsg struct{}
 type tcpConnectedMsg    struct{ conn net.Conn; reconnected bool }
 type udpConnectedMsg    struct{ conn *net.UDPConn }
-type wsConnectedMsg     struct{ conn *websocket.Conn }
+type wsDisconnectedMsg  struct{}
+type wsConnectedMsg     struct{ conn *websocket.Conn; reconnected bool }
 
 type wsMsgReceived struct {
 	userID   string

@@ -51,7 +51,12 @@ func (h *Handler) Register(c *gin.Context) {
 		userID, req.Username, req.Email, string(hash),
 	)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "username or email already exists"})
+		if strings.Contains(err.Error(), "UNIQUE") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "username or email already exists"})
+		} else {
+			log.Printf("auth: db insert error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		}
 		return
 	}
 

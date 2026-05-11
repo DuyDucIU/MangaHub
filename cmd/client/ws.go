@@ -43,7 +43,7 @@ func waitForWS(conn *websocket.Conn) tea.Cmd {
 	return func() tea.Msg {
 		var msg wsInMsg
 		if err := conn.ReadJSON(&msg); err != nil {
-			return errMsg{text: "Chat disconnected"}
+			return wsDisconnectedMsg{}
 		}
 		switch msg.Type {
 		case "message":
@@ -61,6 +61,26 @@ func waitForWS(conn *websocket.Conn) tea.Cmd {
 		default:
 			return wsMsgReceived{}
 		}
+	}
+}
+
+// cmdReconnectWS waits 5 seconds then re-dials and re-authenticates.
+// Returns wsConnectedMsg on success or wsDisconnectedMsg to trigger another retry.
+func cmdReconnectWS(baseURL, token, mangaID string) tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(5 * time.Second)
+		wsURL := strings.Replace(baseURL, "http://", "ws://", 1) +
+			"/ws/chat?manga_id=" + mangaID
+		dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+		conn, _, err := dialer.Dial(wsURL, nil)
+		if err != nil {
+			return wsDisconnectedMsg{}
+		}
+		if err := conn.WriteJSON(map[string]string{"token": token}); err != nil {
+			conn.Close()
+			return wsDisconnectedMsg{}
+		}
+		return wsConnectedMsg{conn: conn, reconnected: true}
 	}
 }
 

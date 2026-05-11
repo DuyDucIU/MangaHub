@@ -50,7 +50,28 @@ func updateChat(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case wsConnectedMsg:
 		m.chatConn = msg.conn
+		if msg.reconnected {
+			m.chatMessages = append(m.chatMessages, chatMessage{
+				text:     "Reconnected to chat",
+				isSystem: true,
+			})
+			m.chatViewport.SetContent(renderMessages(m))
+			m.chatViewport.GotoBottom()
+		}
 		return m, waitForWS(msg.conn)
+
+	case wsDisconnectedMsg:
+		m.chatConn = nil
+		m.chatMessages = append(m.chatMessages, chatMessage{
+			text:     "Chat disconnected — reconnecting in 5s...",
+			isSystem: true,
+		})
+		m.chatViewport.SetContent(renderMessages(m))
+		m.chatViewport.GotoBottom()
+		if m.currentView == viewChat && m.chatMangaID != "" && m.token != "" {
+			return m, cmdReconnectWS(m.baseURL, m.token, m.chatMangaID)
+		}
+		return m, nil
 
 	case wsMsgReceived:
 		if msg.text != "" || msg.userID != "" {

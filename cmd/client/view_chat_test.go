@@ -56,6 +56,43 @@ func TestWsErrMsgAppendsSystemMsg(t *testing.T) {
 	assert.Nil(t, cmd) // no chatConn → no waitForWS re-issued
 }
 
+func TestWsDisconnectedNilsConnAndSchedulesReconnect(t *testing.T) {
+	m := newChatModel()
+	m.token = "tok"
+	m.chatMangaID = "one-piece"
+
+	next, cmd := m.Update(wsDisconnectedMsg{})
+	m2 := next.(Model)
+
+	assert.Nil(t, m2.chatConn)
+	assert.NotNil(t, cmd) // reconnect scheduled
+	assert.Len(t, m2.chatMessages, 1)
+	assert.True(t, m2.chatMessages[0].isSystem)
+	assert.Contains(t, m2.chatMessages[0].text, "reconnecting")
+}
+
+func TestWsDisconnectedNoReconnectOutsideChat(t *testing.T) {
+	m := newChatModel()
+	m.currentView = viewMenu // user already left
+	m.token = "tok"
+	m.chatMangaID = "one-piece"
+
+	next, cmd := m.Update(wsDisconnectedMsg{})
+	m2 := next.(Model)
+
+	assert.Nil(t, m2.chatConn)
+	assert.Nil(t, cmd) // no reconnect
+}
+
+func TestWsReconnectedShowsSystemMsg(t *testing.T) {
+	m := newChatModel()
+	next, _ := m.Update(wsConnectedMsg{reconnected: true})
+	m2 := next.(Model)
+	assert.Len(t, m2.chatMessages, 1)
+	assert.True(t, m2.chatMessages[0].isSystem)
+	assert.Contains(t, m2.chatMessages[0].text, "Reconnected")
+}
+
 func TestChatInputCharLimitSet(t *testing.T) {
 	inp := newChatInput()
 	assert.Equal(t, chatMaxMsgLen, inp.CharLimit)
