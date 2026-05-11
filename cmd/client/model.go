@@ -81,7 +81,7 @@ type chatMessage struct {
 type tcpNotifMsg        struct{ text string }
 type tcpDisconnectedMsg struct{}
 type udpNotifMsg        struct{ text string }
-type tcpConnectedMsg    struct{ conn net.Conn }
+type tcpConnectedMsg    struct{ conn net.Conn; reconnected bool }
 type udpConnectedMsg    struct{ conn *net.UDPConn }
 type wsConnectedMsg     struct{ conn *websocket.Conn }
 
@@ -350,6 +350,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tcpConnectedMsg:
 		m.tcpConn = msg.conn
+		if msg.reconnected {
+			m.notifications = pushNotif(m.notifications, "TCP reconnected — progress sync restored")
+		}
 		return m, waitForTCP(msg.conn)
 
 	case udpConnectedMsg:

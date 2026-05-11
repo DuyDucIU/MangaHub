@@ -49,7 +49,7 @@ func cmdReconnectTCP(addr, token string) tea.Cmd {
 			conn.Close()
 			return tcpDisconnectedMsg{}
 		}
-		return tcpConnectedMsg{conn: conn}
+		return tcpConnectedMsg{conn: conn, reconnected: true}
 	}
 }
 
