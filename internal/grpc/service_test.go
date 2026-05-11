@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	mangagrpc "mangahub/internal/grpc"
+	"mangahub/internal/tcp"
 	"mangahub/pkg/database"
 	pb "mangahub/proto/manga"
 )
@@ -156,6 +158,31 @@ func TestUpdateProgress_ExceedsTotal(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestUpdateProgress_PushesTCPBroadcast(t *testing.T) {
+	db := setupDB(t)
+	seedManga(t, db)
+	seedUser(t, db)
+	seedProgress(t, db)
+
+	broadcastCh := make(chan tcp.ProgressUpdate, 1)
+	svc := &mangagrpc.Service{DB: db, TCPBroadcast: broadcastCh}
+
+	_, err := svc.UpdateProgress(context.Background(), &pb.ProgressRequest{
+		UserId: "user1", MangaId: "one-piece", CurrentChapter: 50, Status: "reading",
+	})
+	require.NoError(t, err)
+
+	select {
+	case update := <-broadcastCh:
+		assert.Equal(t, "user1", update.UserID)
+		assert.Equal(t, "one-piece", update.MangaID)
+		assert.Equal(t, 50, update.Chapter)
+		assert.Equal(t, "One Piece", update.MangaTitle)
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected TCP broadcast but none arrived")
+	}
 }
 
 func TestUpdateProgress_NotInLibrary(t *testing.T) {
