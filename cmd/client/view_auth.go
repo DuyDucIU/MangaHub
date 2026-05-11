@@ -126,7 +126,7 @@ func updateAuth(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentView = viewLogin
 		m.authInputs = initLoginInputs()
 		m.authFocus = 0
-		m.authErr = "Registered! Please log in."
+		m.authErr = "Registered successfully! You can now login."
 		return m, nil
 
 	case errMsg:
