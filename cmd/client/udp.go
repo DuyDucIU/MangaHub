@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -32,6 +33,21 @@ func cmdConnectUDP(serverAddr string) tea.Cmd {
 			return udpNotifMsg{text: "Warning: UDP registration failed — chapter notifications disabled"}
 		}
 		return udpConnectedMsg{conn: conn}
+	}
+}
+
+// cmdReregisterUDP waits 60 seconds then re-sends the register packet so the
+// client stays on the server's subscriber list even after a silent eviction.
+func cmdReregisterUDP(conn *net.UDPConn, serverAddr string) tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(60 * time.Second)
+		srv, err := net.ResolveUDPAddr("udp", serverAddr)
+		if err != nil {
+			return udpReregisteredMsg{}
+		}
+		reg, _ := json.Marshal(map[string]interface{}{"type": "register", "manga_ids": []string{}})
+		conn.WriteToUDP(reg, srv)
+		return udpReregisteredMsg{}
 	}
 }
 

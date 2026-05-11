@@ -117,6 +117,7 @@ func updateAuth(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		tcpAddr := getenv("TCP_ADDR", "localhost:9090")
 		udpAddr := getenv("UDP_ADDR", "localhost:9091")
 		m.tcpAddr = tcpAddr
+		m.udpAddr = udpAddr
 		return m, tea.Batch(
 			cmdConnectTCP(tcpAddr, m.token),
 			cmdConnectUDP(udpAddr),

@@ -81,6 +81,7 @@ type chatMessage struct {
 type tcpNotifMsg        struct{ text string }
 type tcpDisconnectedMsg struct{}
 type udpNotifMsg        struct{ text string }
+type udpReregisteredMsg struct{}
 type tcpConnectedMsg    struct{ conn net.Conn; reconnected bool }
 type udpConnectedMsg    struct{ conn *net.UDPConn }
 type wsConnectedMsg     struct{ conn *websocket.Conn }
@@ -189,6 +190,7 @@ type Model struct {
 	tcpConn  net.Conn
 	tcpAddr  string
 	udpConn  *net.UDPConn
+	udpAddr  string
 
 	// notification history (newest first, max 20)
 	notifications []string
@@ -357,7 +359,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case udpConnectedMsg:
 		m.udpConn = msg.conn
-		return m, waitForUDP(msg.conn)
+		cmds := []tea.Cmd{waitForUDP(msg.conn)}
+		if m.udpAddr != "" {
+			cmds = append(cmds, cmdReregisterUDP(msg.conn, m.udpAddr))
+		}
+		return m, tea.Batch(cmds...)
+
+	case udpReregisteredMsg:
+		if m.udpConn != nil && m.udpAddr != "" {
+			return m, cmdReregisterUDP(m.udpConn, m.udpAddr)
+		}
+		return m, nil
 
 	case addLibraryMsg:
 		if msg.err != "" {
