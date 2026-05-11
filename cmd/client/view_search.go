@@ -166,10 +166,11 @@ func updateSearch(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case searchResultMsg:
 		if msg.err != "" {
-			m.notifications = pushNotif(m.notifications, "Search error: "+msg.err)
+			m.searchErr = "Service unavailable — could not reach server"
 			m.searchLoading = false
 			return m, nil
 		}
+		m.searchErr = ""
 		m.searchResults = msg.results
 		m.searchTotal = msg.total
 		m.searchPage = msg.page
@@ -323,6 +324,10 @@ func renderSearchLeft(m Model, width, height int) string {
 
 	if m.searchLoading {
 		sb.WriteString("\n  " + m.spinner.View() + " Searching...\n")
+		return sb.String()
+	}
+	if m.searchErr != "" {
+		sb.WriteString("\n" + styleError.Render("  "+m.searchErr) + "\n")
 		return sb.String()
 	}
 	if len(m.searchResults) == 0 {

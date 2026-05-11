@@ -78,11 +78,12 @@ type chatMessage struct {
 
 // --- tea.Msg types ---
 
-type tcpNotifMsg     struct{ text string }
-type udpNotifMsg     struct{ text string }
-type tcpConnectedMsg struct{ conn net.Conn }
-type udpConnectedMsg struct{ conn *net.UDPConn }
-type wsConnectedMsg  struct{ conn *websocket.Conn }
+type tcpNotifMsg        struct{ text string }
+type tcpDisconnectedMsg struct{}
+type udpNotifMsg        struct{ text string }
+type tcpConnectedMsg    struct{ conn net.Conn }
+type udpConnectedMsg    struct{ conn *net.UDPConn }
+type wsConnectedMsg     struct{ conn *websocket.Conn }
 
 type wsMsgReceived struct {
 	userID   string
@@ -185,8 +186,9 @@ type Model struct {
 	username string
 
 	// background connections
-	tcpConn net.Conn
-	udpConn *net.UDPConn
+	tcpConn  net.Conn
+	tcpAddr  string
+	udpConn  *net.UDPConn
 
 	// notification history (newest first, max 20)
 	notifications []string
@@ -199,7 +201,8 @@ type Model struct {
 	authFocus  int
 	authErr    string
 
-	// search view (searchState enum removed)
+	// search view
+	searchErr          string
 	searchInputFocused bool
 	searchPerformed    bool
 	searchLastQuery    string
@@ -325,6 +328,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.tcpConn != nil {
 			return m, waitForTCP(m.tcpConn)
+		}
+		return m, nil
+
+	case tcpDisconnectedMsg:
+		m.tcpConn = nil
+		m.notifications = pushNotif(m.notifications, "TCP service unavailable — reconnecting in 5s...")
+		if m.tcpAddr != "" && m.token != "" {
+			return m, cmdReconnectTCP(m.tcpAddr, m.token)
 		}
 		return m, nil
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -34,13 +35,31 @@ func cmdConnectTCP(addr, token string) tea.Cmd {
 	}
 }
 
+// cmdReconnectTCP waits 5 seconds then attempts to re-dial and re-authenticate.
+// Returns tcpConnectedMsg on success or tcpDisconnectedMsg to trigger another retry.
+func cmdReconnectTCP(addr, token string) tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(5 * time.Second)
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return tcpDisconnectedMsg{}
+		}
+		auth, _ := json.Marshal(map[string]string{"type": "auth", "token": token})
+		if _, err := fmt.Fprintf(conn, "%s\n", auth); err != nil {
+			conn.Close()
+			return tcpDisconnectedMsg{}
+		}
+		return tcpConnectedMsg{conn: conn}
+	}
+}
+
 // waitForTCP blocks until one message arrives on conn, then returns it as a
 // tcpNotifMsg. The caller must re-issue this Cmd after each message.
 func waitForTCP(conn net.Conn) tea.Cmd {
 	return func() tea.Msg {
 		scanner := bufio.NewScanner(conn)
 		if !scanner.Scan() {
-			return tcpNotifMsg{text: "TCP connection closed"}
+			return tcpDisconnectedMsg{}
 		}
 		var msg tcpServerMsg
 		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {

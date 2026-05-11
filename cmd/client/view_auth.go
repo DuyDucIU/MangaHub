@@ -53,7 +53,7 @@ func cmdLogin(baseURL, username, password string) tea.Cmd {
 			"password": password,
 		}, &resp)
 		if err != nil {
-			return errMsg{text: "Request failed: " + err.Error()}
+			return errMsg{text: "Service unavailable — could not reach server"}
 		}
 		if code != 200 {
 			return errMsg{text: resp.Error}
@@ -78,7 +78,7 @@ func cmdRegister(baseURL, username, email, password string) tea.Cmd {
 			"password": password,
 		}, &resp)
 		if err != nil {
-			return errMsg{text: "Request failed: " + err.Error()}
+			return errMsg{text: "Service unavailable — could not reach server"}
 		}
 		if code != 201 {
 			return errMsg{text: resp.Error}
@@ -116,6 +116,7 @@ func updateAuth(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sidebarIdx = 0
 		tcpAddr := getenv("TCP_ADDR", "localhost:9090")
 		udpAddr := getenv("UDP_ADDR", "localhost:9091")
+		m.tcpAddr = tcpAddr
 		return m, tea.Batch(
 			cmdConnectTCP(tcpAddr, m.token),
 			cmdConnectUDP(udpAddr),
