@@ -145,29 +145,142 @@ user_progress  -- user_id, manga_id, current_chapter, status, updated_at
 
 ## API Reference
 
+All error responses share a common shape:
+
+```json
+{ "error": "<message>" }
+```
+
 ### Authentication
 
+#### `POST /auth/register`
+
+```json
+// Request
+{ "username": "alice", "email": "alice@example.com", "password": "secret123" }
+
+// 201 Created
+{ "message": "Account created", "user_id": "usr_a1b2c3d4" }
+
+// 400 Bad Request            — username or email already taken
+// 422 Unprocessable Entity   — validation failure (min length, invalid email, etc.)
 ```
-POST /auth/register    { "username", "email", "password" }
-POST /auth/login       { "username", "password" }  →  { "token", "expires_at" }
+
+#### `POST /auth/login`
+
+```json
+// Request
+{ "username": "alice", "password": "secret123" }
+
+// 200 OK
+{ "token": "<jwt>", "expires_at": "2026-05-14T10:00:00Z" }
+
+// 401 Unauthorized  — wrong password
+// 404 Not Found     — account does not exist
 ```
 
 All endpoints below require `Authorization: Bearer <token>`.
 
 ### Manga
 
+#### `GET /manga`
+
+Query parameters: `q` (title search), `genre`, `status` (`ongoing` | `completed`), `page` (default 1), `page_size` (default 20).
+
+```json
+// 200 OK
+{
+  "results": [
+    {
+      "id": "one-piece",
+      "title": "One Piece",
+      "author": "Eiichiro Oda",
+      "genres": ["Action", "Adventure"],
+      "status": "ongoing",
+      "total_chapters": 1100,
+      "description": "...",
+      "cover_url": "https://..."
+    }
+  ],
+  "count": 20,
+  "total": 54,
+  "page": 1,
+  "page_size": 20
+}
 ```
-GET  /manga           ?title=&genre=&status=&page=&limit=    Search manga
-GET  /manga/:id                                               Get manga details
+
+#### `GET /manga/:id`
+
+```json
+// 200 OK
+{
+  "id": "one-piece",
+  "title": "One Piece",
+  "author": "Eiichiro Oda",
+  "genres": ["Action", "Adventure"],
+  "status": "ongoing",
+  "total_chapters": 1100,
+  "description": "...",
+  "cover_url": "https://..."
+}
+
+// 404 Not Found  — manga does not exist
 ```
 
 ### User Library
 
+#### `POST /users/library`
+
+Valid `status` values: `reading`, `completed`, `plan_to_read`, `on_hold`, `dropped`.
+
+```json
+// Request
+{ "manga_id": "one-piece", "status": "reading", "current_chapter": 10 }
+
+// 201 Created
+{ "message": "added to library", "manga_id": "one-piece", "status": "reading", "current_chapter": 10 }
+
+// 404 Not Found            — manga does not exist
+// 409 Conflict             — manga already in library
+// 422 Unprocessable Entity — validation failure
 ```
-POST   /users/library               { "manga_id", "status" }         Add to library
-GET    /users/library                                                 Get library
-PUT    /users/progress              { "manga_id", "chapter", "status" }  Update progress
-DELETE /users/library/:manga_id                                       Remove from library
+
+#### `GET /users/library`
+
+```json
+// 200 OK
+{
+  "reading_lists": {
+    "reading":      [{ "manga_id": "one-piece", "title": "One Piece", "current_chapter": 10, "status": "reading", "updated_at": "2026-05-13T..." }],
+    "completed":    [],
+    "plan_to_read": [],
+    "on_hold":      [],
+    "dropped":      []
+  },
+  "total": 1
+}
+```
+
+#### `PUT /users/progress`
+
+```json
+// Request
+{ "manga_id": "one-piece", "current_chapter": 11, "status": "reading" }
+
+// 200 OK
+{ "message": "progress updated", "manga_id": "one-piece", "current_chapter": 11, "status": "reading" }
+
+// 404 Not Found            — manga not in library
+// 422 Unprocessable Entity — validation failure
+```
+
+#### `DELETE /users/library/:manga_id`
+
+```json
+// 200 OK
+{ "message": "removed from library", "manga_id": "one-piece" }
+
+// 404 Not Found  — manga not in library
 ```
 
 ### Real-time
